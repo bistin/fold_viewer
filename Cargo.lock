@@ -2125,11 +2125,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mesh-lib"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mesh_explore"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
+ "mesh-lib",
+ "serde_json",
 ]
 
 [[package]]

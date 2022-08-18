@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 bevy = "0.8"
 bevy-inspector-egui = "0.12.1"
+mesh-lib = { path = "./mesh-lib" }
+serde_json = "1.0"
