@@ -1,90 +1,64 @@
 use bevy::prelude::*;
 use bevy::render::mesh::{self, PrimitiveTopology};
 use bevy_inspector_egui::WorldInspectorPlugin;
+use smooth_bevy_cameras::{LookTransformPlugin};
+use smooth_bevy_cameras::{
+    controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
+};
+
+
 use mesh_lib::Fold;
 use std::fs;
 
+
+
 use bevy::{
-    asset::{AddAsset, AssetLoader, LoadContext, LoadedAsset},
-    prelude::*,
     render::{
         mesh::{Indices, Mesh, VertexAttributeValues},
     },
-    utils::BoxedFuture,
 };
 
 
 fn main() {
+
+    let data = fs::read_to_string("./mesh-lib/src/crand.fold").unwrap();
+    let fold: Fold = serde_json::from_str(&data).unwrap();
+
     App::new()
-        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(fold)
         .add_plugins(DefaultPlugins)
+        .add_plugin(LookTransformPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system(setup)
+        .add_system(joint_animation)
+        .add_plugin(OrbitCameraPlugin::default())
         .run();
 }
-
-
-// fn stl_to_wireframe_mesh(stl: &stl_io::IndexedMesh) -> Mesh {
-//     let mut mesh = Mesh::new(PrimitiveTopology::LineList);
-
-//     let positions = stl.vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
-//     let mut indices = Vec::with_capacity(stl.faces.len() * 3);
-//     let normals = vec![[1.0, 0.0, 0.0]; stl.vertices.len()];
-//     let uvs = vec![[0.0, 0.0]; stl.vertices.len()];
-
-//     for face in &stl.faces {
-//         for j in 0..3 {
-//             indices.push(face.vertices[j] as u32);
-//             indices.push(face.vertices[(j + 1) % 3] as u32);
-//         }
-//     }
-//     print!("{:?}", indices);
-//     mesh.insert_attribute(
-//         Mesh::ATTRIBUTE_POSITION,
-//         VertexAttributeValues::Float32x3(positions),
-//     );
-//     mesh.insert_attribute(
-//         Mesh::ATTRIBUTE_NORMAL,
-//         VertexAttributeValues::Float32x3(normals),
-//     );
-//     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, VertexAttributeValues::Float32x2(uvs));
-//     mesh.set_indices(Some(Indices::U32(indices)));
-
-//     mesh
-// }
 
 /// set up a simple 3D scene
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    fold_obj: Res<Fold>
     ) {
    
 
-    let data = fs::read_to_string("./mesh-lib/src/crand.fold").unwrap();
-    let fold: Fold = serde_json::from_str(&data).unwrap();
-
-    println!("{:?}", fold);
-
-    let positions = fold.vertices_coords;
-    let mut indices = Vec::with_capacity(fold.faces_vertices.len() * 3);
-    let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
+    let positions = &fold_obj.vertices_coords;
+    let mut indices = Vec::with_capacity(fold_obj.faces_vertices.len() * 3);
+    let normals = vec![[1.0, 1.0, 0.0]; positions.len()];
     let uvs = vec![[0.0, 0.0]; positions.len()];
 
-    for face in &fold.faces_vertices {
+    for face in &fold_obj.faces_vertices {
         for j in 0..3 {
             indices.push(face[j] as u32);
             indices.push(face[(j + 1) % 3] as u32);
         }
     }
-    print!("{:?}", indices);
-
-
-
 
     let mut mesh = Mesh::new(PrimitiveTopology::LineList);
     mesh.set_indices(Some(Indices::U32(indices)));
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions.clone());
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     //mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0,1.0,1.0,1.0]);
     //mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
@@ -113,23 +87,34 @@ fn setup(
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
         ..default()
     });
-    // camera
-    // commands.spawn_bundle(Camera3dBundle {
-    //     transform: Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-    //     ..default()
-    // });
-    commands.spawn_bundle(Camera3dBundle {
-        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
-    // commands.spawn(Camera3dBundle {
-    //     transform: Transform::from_translation(Vec3::new(-2.0, 2.5, 5.0))
-    //         .looking_at(Vec3::default(), Vec3::unit_y()),
-    //     ..Default::default()
-    // });
-    // commands.spawn_bundle(PerspectiveCameraBundle {
-    //     transform: Transform::from_xyz(-2.0, 2.5, 5.0)
-    //         .looking_at(Vec3::ZERO, Vec3::Y),
-    //         ..default()
-    // });
+
+
+    commands
+    .spawn_bundle(Camera3dBundle::default())
+    .insert_bundle(OrbitCameraBundle::new(
+        OrbitCameraController::default(),
+        Vec3::new(-2.0, 5.0, 5.0),
+        Vec3::new(0., 0., 0.),
+    ));
+}
+
+
+fn joint_animation(mut meshes: ResMut<Assets<Mesh>>, mut fold_obj: ResMut<Fold>,) {
+
+    let mut positions = fold_obj.vertices_coords.clone();
+
+    for i in &mut positions.iter_mut() {
+        i[1] = i[1]+0.01
+    }
+
+    // for  pos in positions.iter_mut() {
+    //    *pos
+    // }
+    fold_obj.vertices_coords = positions;
+    for (_handle_id, mesh) in meshes.iter_mut() {
+        //println!("{:?}", handle_id)
+        //mesh.attribute(id)
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, fold_obj.vertices_coords.clone());
+    }
+    //println!("{:?}", fold_obj)
 }
