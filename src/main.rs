@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy::render::mesh::{self, PrimitiveTopology};
+use bevy::render::mesh::{PrimitiveTopology};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use smooth_bevy_cameras::{LookTransformPlugin};
 use smooth_bevy_cameras::{
@@ -101,20 +101,16 @@ fn setup(
 
 fn joint_animation(mut meshes: ResMut<Assets<Mesh>>, mut fold_obj: ResMut<Fold>,) {
 
-    let mut positions = fold_obj.vertices_coords.clone();
+    let positions = &mut *fold_obj.vertices_coords;
 
     for i in &mut positions.iter_mut() {
-        i[1] = i[1]+0.01
+        i[1] = i[1]+0.005
     }
-
-    // for  pos in positions.iter_mut() {
-    //    *pos
-    // }
-    fold_obj.vertices_coords = positions;
+    
     for (_handle_id, mesh) in meshes.iter_mut() {
         //println!("{:?}", handle_id)
         //mesh.attribute(id)
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, fold_obj.vertices_coords.clone());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions.to_vec());
     }
     //println!("{:?}", fold_obj)
 }
