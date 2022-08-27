@@ -105,6 +105,7 @@ fn joint_animation(mut meshes: ResMut<Assets<Mesh>>, mut fold_obj: ResMut<Fold>)
         normals[i][2] = normal[2];
     }
 
+    println!("{:?}", normals);
     let edge = &fold_obj.edges_vertices;
     let positions = &mut *fold_obj.vertices_coords;
     for i in &mut positions.iter_mut() {
@@ -128,4 +129,11 @@ fn points_cross(a: &[f32; 3], b: &[f32; 3], c: &[f32; 3]) -> [f32; 3] {
         cb[2] * ab[0] - cb[0] * ab[2],
         cb[0] * ab[1] - cb[1] * ab[0],
     ]
+}
+
+fn normalize(vector: &[f32; 3]) -> [f32; 3] {
+    let length_sqr = vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2];
+    let length = length_sqr.sqrt();
+
+    [vector[0] / length, vector[1] / length, vector[2] / length]
 }
