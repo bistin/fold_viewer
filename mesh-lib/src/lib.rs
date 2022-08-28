@@ -26,21 +26,21 @@ pub struct Fold {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Crease {
     pub vertices_idxs: [i32; 2],
+    pub top_idxs: [i32; 2],
     pub assignment: String,
     pub edge_idx: i32,
-    pub is_crease: bool,
+    //pub is_crease: bool,
 }
 
 impl Fold {
     // face1Ind, vertInd, face2Ind, ver2Ind, edgeInd, angle
-    pub fn get_creases(&self) -> i32 {
+    pub fn get_creases(&self) -> Vec<Crease> {
         let mut edge_map = HashMap::new();
         let faces_vertices = &self.faces_vertices;
         let edges_vertices = &self.edges_vertices;
         let edges_assignment = &self.edges_assignment;
-        let length = edges_vertices.len();
 
-        let mut zero_vec: Vec<Crease> = Vec::with_capacity(length);
+        let mut zero_vec: Vec<Crease> = Vec::new();
         for (i, idxs) in faces_vertices.iter().enumerate() {
             edge_map
                 .entry(map_key(idxs[0], idxs[1]))
@@ -61,21 +61,31 @@ impl Fold {
             let key = map_key(idxs[0], idxs[1]);
             let val = edge_map.get(&key).unwrap();
             let is_crease = val.len() == 2;
-            println!("{:?}", key);
-            println!("2 {:?}", val);
-            zero_vec.push(Crease {
-                vertices_idxs: if is_crease {
-                    [val[0] as i32, val[1] as i32]
-                } else {
-                    [val[0] as i32, 0]
-                },
-                assignment: edges_assignment[i].clone(),
-                edge_idx: i as i32,
-                is_crease,
-            });
+
+            if is_crease {
+                let face1_idx = faces_vertices[val[0]]
+                    .iter()
+                    .position(|&x| x != idxs[0] && x != idxs[1])
+                    .unwrap();
+
+                let face2_idx = faces_vertices[val[1]]
+                    .iter()
+                    .position(|&x| x != idxs[0] && x != idxs[1])
+                    .unwrap();
+
+                zero_vec.push(Crease {
+                    vertices_idxs: [val[0] as i32, val[1] as i32],
+                    assignment: edges_assignment[i].clone(),
+                    edge_idx: i as i32,
+                    top_idxs: [
+                        faces_vertices[val[0]][face1_idx],
+                        faces_vertices[val[1]][face2_idx],
+                    ],
+                });
+            }
         }
-        println!("{:?}", zero_vec);
-        32
+        // println!("{:?}", zero_vec);
+        return zero_vec;
     }
 }
 
