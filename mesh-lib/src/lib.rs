@@ -29,9 +29,16 @@ pub struct Crease {
     pub top_idxs: [i32; 2],
     pub assignment: String,
     pub edge_idx: i32,
-    //pub is_crease: bool,
+    pub target_angle: f64,
 }
 
+// for (var i=0;i<fold.edges_assignment.length;i++){
+//      var assignment = fold.edges_assignment[i];
+//      if (assignment == "M") foldAngles.push(-180);
+//      else if (assignment == "V") foldAngles.push(180);
+//      else if (assignment == "F") foldAngles.push(0);
+//      else foldAngles.push(null);
+//  }
 impl Fold {
     // face1Ind, vertInd, face2Ind, ver2Ind, edgeInd, angle
     pub fn get_creases(&self) -> Vec<Crease> {
@@ -60,7 +67,14 @@ impl Fold {
         for (i, idxs) in edges_vertices.iter().enumerate() {
             let key = map_key(idxs[0], idxs[1]);
             let val = edge_map.get(&key).unwrap();
-            let is_crease = val.len() == 2;
+            let assignment = &edges_assignment[i];
+            let is_crease = assignment == "M" || assignment == "V" || assignment == "F";
+            let angle = match assignment.as_str() {
+                "M" => -180.0f64,
+                "V" => 180.0f64,
+                "F" => 0.0f64,
+                _ => 0.0f64,
+            };
 
             if is_crease {
                 let face1_idx = faces_vertices[val[0]]
@@ -81,10 +95,10 @@ impl Fold {
                         faces_vertices[val[0]][face1_idx],
                         faces_vertices[val[1]][face2_idx],
                     ],
+                    target_angle: angle * std::f64::consts::PI / 180.0,
                 });
             }
         }
-        // println!("{:?}", zero_vec);
         return zero_vec;
     }
 }

@@ -6,7 +6,7 @@ use smooth_bevy_cameras::controllers::orbit::{
 };
 use smooth_bevy_cameras::LookTransformPlugin;
 
-use mesh_lib::Fold;
+use mesh_lib::{Crease, Fold};
 use std::fs;
 
 use bevy::render::mesh::{Indices, Mesh, VertexAttributeValues};
@@ -14,9 +14,10 @@ use bevy::render::mesh::{Indices, Mesh, VertexAttributeValues};
 fn main() {
     let data = fs::read_to_string("./mesh-lib/src/crand.fold").unwrap();
     let fold: Fold = serde_json::from_str(&data).unwrap();
-
+    let creases = fold.get_creases();
     App::new()
         .insert_resource(fold)
+        .insert_resource(creases)
         .add_plugins(DefaultPlugins)
         .add_plugin(LookTransformPlugin)
         .add_plugin(WorldInspectorPlugin::new())
@@ -86,9 +87,13 @@ fn setup(
         ));
 }
 
-fn joint_animation(mut meshes: ResMut<Assets<Mesh>>, mut fold_obj: ResMut<Fold>) {
+fn joint_animation(
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut fold_obj: ResMut<Fold>,
+    mut creases: ResMut<Vec<Crease>>,
+) {
     let ref_fold = &mut *fold_obj;
-
+    let ref_creases = &mut *creases;
     // calculate all normals
     let length = (ref_fold.faces_vertices).len();
     let faces_vertices = &mut ref_fold.faces_vertices;
@@ -99,13 +104,14 @@ fn joint_animation(mut meshes: ResMut<Assets<Mesh>>, mut fold_obj: ResMut<Fold>)
         let a = positions.get(face[0] as usize).unwrap();
         let b = positions.get(face[1] as usize).unwrap();
         let c = positions.get(face[2] as usize).unwrap();
-        let normal = points_cross(&a, &b, &c);
+        let normal = normalize(&points_cross(&a, &b, &c));
         normals[i][0] = normal[0];
         normals[i][1] = normal[1];
         normals[i][2] = normal[2];
     }
 
-    println!("{:?}", normals);
+    println!("{:?}", ref_creases);
+
     let edge = &fold_obj.edges_vertices;
     let positions = &mut *fold_obj.vertices_coords;
     for i in &mut positions.iter_mut() {
