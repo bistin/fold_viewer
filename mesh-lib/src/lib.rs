@@ -9,6 +9,12 @@ fn map_key(a: i32, b: i32) -> String {
     }
 }
 
+fn length(a: &[f32; 3], b: &[f32; 3]) -> f32 {
+    let ab = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+
+    (ab[0].powi(2) + ab[1].powi(2) + ab[2].powi(2)).sqrt()
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Fold {
     pub file_spec: f32,
@@ -41,6 +47,18 @@ pub struct Crease {
 //  }
 impl Fold {
     // face1Ind, vertInd, face2Ind, ver2Ind, edgeInd, angle
+    pub fn get_edge_length(&self) -> Vec<f32> {
+        let edges_vertices = &self.edges_vertices;
+        let vertices_coords = &self.vertices_coords;
+        let mut ret_vec: Vec<f32> = Vec::new();
+        for idxs in edges_vertices.iter() {
+            let v0 = vertices_coords[idxs[0] as usize];
+            let v1 = vertices_coords[idxs[1] as usize];
+            ret_vec.push(length(&v0, &v1));
+        }
+        ret_vec
+    }
+
     pub fn get_creases(&self) -> Vec<Crease> {
         let mut edge_map = HashMap::new();
         let faces_vertices = &self.faces_vertices;

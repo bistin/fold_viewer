@@ -15,9 +15,12 @@ fn main() {
     let data = fs::read_to_string("./mesh-lib/src/crand.fold").unwrap();
     let fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
+    let edge_lengths = fold.get_edge_length();
+
     App::new()
         .insert_resource(fold)
         .insert_resource(creases)
+        .insert_resource(edge_lengths)
         .add_plugins(DefaultPlugins)
         .add_plugin(LookTransformPlugin)
         .add_plugin(WorldInspectorPlugin::new())
@@ -91,6 +94,7 @@ fn joint_animation(
     mut meshes: ResMut<Assets<Mesh>>,
     mut fold_obj: ResMut<Fold>,
     mut creases: ResMut<Vec<Crease>>,
+    mut edge_lengths: ResMut<Vec<f32>>,
 ) {
     let ref_fold = &mut *fold_obj;
     let ref_creases = &mut *creases;
@@ -110,7 +114,7 @@ fn joint_animation(
         normals[i][2] = normal[2];
     }
 
-    println!("{:?}", ref_creases);
+    println!("{:?}", edge_lengths);
 
     let edge = &fold_obj.edges_vertices;
     let positions = &mut *fold_obj.vertices_coords;
