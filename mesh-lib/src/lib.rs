@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-fn map_key(a: i32, b: i32) -> String {
+pub mod vec_math;
+
+use crate::vec_math::{points_cross, points_length};
+
+fn map_key(a: usize, b: usize) -> String {
     if a < b {
         format!("{}_{}", a, b)
     } else {
@@ -24,19 +28,28 @@ pub struct Fold {
     pub frame_attributes: Vec<String>,
     pub frame_unit: String,
     pub vertices_coords: Vec<[f32; 3]>,
-    pub edges_vertices: Vec<[i32; 2]>,
+    pub edges_vertices: Vec<[usize; 2]>,
     pub edges_assignment: Vec<String>,
-    pub faces_vertices: Vec<[i32; 3]>,
+    pub faces_vertices: Vec<[usize; 3]>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Crease {
-    pub vertices_idxs: [i32; 2],
-    pub top_idxs: [i32; 2],
-    pub assignment: String,
-    pub edge_idx: i32,
+    // edge origin point and length
+    pub edge_idx: usize,
+    pub edge_vertices_idxs: [usize; 2],
+    pub origin_lentgh: f32,
     pub target_angle: f64,
+    pub assignment: String,
+    pub init_face_normals: [[f32; 3]; 2],
+    // face index
+    pub face_idxs: [usize; 2],
+
+    // top vertice idx
+    pub top_vertices_idxs: [usize; 2],
 }
+
+impl Crease {}
 
 // for (var i=0;i<fold.edges_assignment.length;i++){
 //      var assignment = fold.edges_assignment[i];
@@ -64,6 +77,7 @@ impl Fold {
         let faces_vertices = &self.faces_vertices;
         let edges_vertices = &self.edges_vertices;
         let edges_assignment = &self.edges_assignment;
+        let vertices_coords = &self.vertices_coords;
 
         let mut zero_vec: Vec<Crease> = Vec::new();
         for (i, idxs) in faces_vertices.iter().enumerate() {
@@ -95,23 +109,40 @@ impl Fold {
             };
 
             if is_crease {
-                let face1_idx = faces_vertices[val[0]]
+                let face1_top_idx = faces_vertices[val[0]]
                     .iter()
                     .position(|&x| x != idxs[0] && x != idxs[1])
                     .unwrap();
 
-                let face2_idx = faces_vertices[val[1]]
+                let face2_top_idx = faces_vertices[val[1]]
                     .iter()
                     .position(|&x| x != idxs[0] && x != idxs[1])
                     .unwrap();
 
                 zero_vec.push(Crease {
-                    vertices_idxs: [val[0] as i32, val[1] as i32],
+                    edge_vertices_idxs: [idxs[0], idxs[1]],
+                    origin_lentgh: points_length(
+                        &vertices_coords[idxs[0]],
+                        &vertices_coords[idxs[1]],
+                    ),
+                    face_idxs: [val[0], val[1]],
+                    init_face_normals: [
+                        points_cross(
+                            &vertices_coords[faces_vertices[val[0]][0]],
+                            &vertices_coords[faces_vertices[val[0]][1]],
+                            &vertices_coords[faces_vertices[val[0]][2]],
+                        ),
+                        points_cross(
+                            &vertices_coords[faces_vertices[val[1]][0]],
+                            &vertices_coords[faces_vertices[val[1]][1]],
+                            &vertices_coords[faces_vertices[val[1]][2]],
+                        ),
+                    ],
                     assignment: edges_assignment[i].clone(),
-                    edge_idx: i as i32,
-                    top_idxs: [
-                        faces_vertices[val[0]][face1_idx],
-                        faces_vertices[val[1]][face2_idx],
+                    edge_idx: i,
+                    top_vertices_idxs: [
+                        faces_vertices[val[0]][face1_top_idx],
+                        faces_vertices[val[1]][face2_top_idx],
                     ],
                     target_angle: angle * std::f64::consts::PI / 180.0,
                 });

@@ -6,6 +6,7 @@ use smooth_bevy_cameras::controllers::orbit::{
 };
 use smooth_bevy_cameras::LookTransformPlugin;
 
+use mesh_lib::vec_math::{normalize, points_cross};
 use mesh_lib::{Crease, Fold};
 use std::fs;
 
@@ -128,22 +129,4 @@ fn joint_animation(
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions.to_vec());
     }
     //println!("{:?}", fold_obj)
-}
-
-fn points_cross(a: &[f32; 3], b: &[f32; 3], c: &[f32; 3]) -> [f32; 3] {
-    let cb = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
-    let ab = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-
-    [
-        cb[1] * ab[2] - cb[2] * ab[1],
-        cb[2] * ab[0] - cb[0] * ab[2],
-        cb[0] * ab[1] - cb[1] * ab[0],
-    ]
-}
-
-fn normalize(vector: &[f32; 3]) -> [f32; 3] {
-    let length_sqr = vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2];
-    let length = length_sqr.sqrt();
-
-    [vector[0] / length, vector[1] / length, vector[2] / length]
 }
