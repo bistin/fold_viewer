@@ -13,12 +13,6 @@ fn map_key(a: usize, b: usize) -> String {
     }
 }
 
-fn length(a: &[f32; 3], b: &[f32; 3]) -> f32 {
-    let ab = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-
-    (ab[0].powi(2) + ab[1].powi(2) + ab[2].powi(2)).sqrt()
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Fold {
     pub file_spec: f32,
@@ -49,7 +43,15 @@ pub struct Crease {
     pub top_vertices_idxs: [usize; 2],
 }
 
-impl Crease {}
+impl Crease {
+    pub fn get_edge_vector(&self, vertices_coords: Vec<[f32; 3]>) -> [f32; 3] {
+        // v0 -> v1
+        let edge_vertices_idxs = &self.edge_vertices_idxs;
+        let a = vertices_coords[edge_vertices_idxs[1]];
+        let b = vertices_coords[edge_vertices_idxs[0]];
+        [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+    }
+}
 
 // for (var i=0;i<fold.edges_assignment.length;i++){
 //      var assignment = fold.edges_assignment[i];
@@ -65,9 +67,9 @@ impl Fold {
         let vertices_coords = &self.vertices_coords;
         let mut ret_vec: Vec<f32> = Vec::new();
         for idxs in edges_vertices.iter() {
-            let v0 = vertices_coords[idxs[0] as usize];
-            let v1 = vertices_coords[idxs[1] as usize];
-            ret_vec.push(length(&v0, &v1));
+            let v0 = vertices_coords[idxs[0]];
+            let v1 = vertices_coords[idxs[1]];
+            ret_vec.push(points_length(&v0, &v1));
         }
         ret_vec
     }
@@ -120,7 +122,7 @@ impl Fold {
                     .unwrap();
 
                 zero_vec.push(Crease {
-                    edge_vertices_idxs: [idxs[0], idxs[1]],
+                    edge_vertices_idxs: idxs.clone(),
                     origin_lentgh: points_length(
                         &vertices_coords[idxs[0]],
                         &vertices_coords[idxs[1]],
