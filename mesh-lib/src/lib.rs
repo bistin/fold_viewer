@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 pub mod vec_math;
 
-use crate::vec_math::{points_cross, points_length};
+use crate::vec_math::{cross, dot, normalize, points_cross, points_length};
 
 fn map_key(a: usize, b: usize) -> String {
     if a < b {
@@ -44,12 +44,56 @@ pub struct Crease {
 }
 
 impl Crease {
-    pub fn get_edge_vector(&self, vertices_coords: Vec<[f32; 3]>) -> [f32; 3] {
+    pub fn get_edge_vector(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 3] {
         // v0 -> v1
         let edge_vertices_idxs = &self.edge_vertices_idxs;
         let a = vertices_coords[edge_vertices_idxs[1]];
         let b = vertices_coords[edge_vertices_idxs[0]];
         [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+    }
+
+    // var crease = creases[j];
+    //  var normal1 = normals[crease.face1Index];
+    //  var normal2 = normals[crease.face2Index];
+    //  var dotNormals = normal1.dot(normal2);
+    //  if (dotNormals < -1.0) dotNormals = -1.0;
+    //  else if (dotNormals > 1.0) dotNormals = 1.0;
+
+    //  var creaseVector = crease.getVector().normalize();
+    //  //https://math.stackexchange.com/questions/47059/how-do-i-calculate-a-dihedral-angle-given-cartesian-coordinates
+    //  var theta = Math.atan2((normal1.clone().cross(creaseVector)).dot(normal2), dotNormals);
+
+    pub fn get_theta(
+        &self,
+        vertices_coords: &Vec<[f32; 3]>,
+        faces_vertices: &Vec<[usize; 3]>,
+    ) -> f32 {
+        let val = &self.face_idxs;
+
+        let normal1 = normalize(&points_cross(
+            &vertices_coords[faces_vertices[val[0]][0]],
+            &vertices_coords[faces_vertices[val[0]][1]],
+            &vertices_coords[faces_vertices[val[0]][2]],
+        ));
+
+        let normal2 = normalize(&points_cross(
+            &vertices_coords[faces_vertices[val[1]][0]],
+            &vertices_coords[faces_vertices[val[1]][1]],
+            &vertices_coords[faces_vertices[val[1]][2]],
+        ));
+
+        let mut dot_normals = dot(&normal1, &normal2);
+        dot_normals = if dot_normals > 1.0 {
+            1.0
+        } else if dot_normals < -1.0 {
+            -1.0
+        } else {
+            dot_normals
+        };
+
+        let crease_vector = self.get_edge_vector(vertices_coords);
+
+        dot(&cross(&normal1, &crease_vector), &normal2).atan2(dot_normals)
     }
 }
 
@@ -163,7 +207,14 @@ mod tests {
     fn test_parser() {
         let data = fs::read_to_string("./src/crand.fold").unwrap();
         let p: Fold = serde_json::from_str(&data).unwrap();
+        let vertices_coords = &p.vertices_coords;
+        let faces_vertices = &p.faces_vertices;
         //println!("{:?}", p);
-        p.get_creases();
+        let creases = p.get_creases();
+
+        for crease in creases {
+            let theta1 = crease.get_theta(vertices_coords, faces_vertices);
+            println!("{:?}", theta1);
+        }
     }
 }
