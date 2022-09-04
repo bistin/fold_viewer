@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 pub mod vec_math;
 
-use crate::vec_math::{cross, dot, normalize, points_cross, points_length};
+use crate::vec_math::{cross, dot, normalize, points_cross, points_length, vec_length};
 
 fn map_key(a: usize, b: usize) -> String {
     if a < b {
@@ -33,9 +33,9 @@ pub struct Crease {
     pub edge_idx: usize,
     pub edge_vertices_idxs: [usize; 2],
     pub origin_lentgh: f32,
-    pub target_angle: f64,
+    pub target_angle: f32,
     pub assignment: String,
-    pub init_face_normals: [[f32; 3]; 2],
+    pub init_face_dist: [f32; 2],
     // face index
     pub face_idxs: [usize; 2],
 
@@ -62,6 +62,26 @@ impl Crease {
     //  var creaseVector = crease.getVector().normalize();
     //  //https://math.stackexchange.com/questions/47059/how-do-i-calculate-a-dihedral-angle-given-cartesian-coordinates
     //  var theta = Math.atan2((normal1.clone().cross(creaseVector)).dot(normal2), dotNormals);
+    pub fn get_normals(
+        &self,
+        vertices_coords: &Vec<[f32; 3]>,
+        faces_vertices: &Vec<[usize; 3]>,
+    ) -> [[f32; 3]; 2] {
+        let val = &self.face_idxs;
+
+        let normal1 = normalize(&points_cross(
+            &vertices_coords[faces_vertices[val[0]][0]],
+            &vertices_coords[faces_vertices[val[0]][1]],
+            &vertices_coords[faces_vertices[val[0]][2]],
+        ));
+
+        let normal2 = normalize(&points_cross(
+            &vertices_coords[faces_vertices[val[1]][0]],
+            &vertices_coords[faces_vertices[val[1]][1]],
+            &vertices_coords[faces_vertices[val[1]][2]],
+        ));
+        [normal1, normal2]
+    }
 
     pub fn get_theta(
         &self,
@@ -172,17 +192,18 @@ impl Fold {
                         &vertices_coords[idxs[1]],
                     ),
                     face_idxs: [val[0], val[1]],
-                    init_face_normals: [
-                        points_cross(
+
+                    init_face_dist: [
+                        vec_length(&points_cross(
                             &vertices_coords[faces_vertices[val[0]][0]],
                             &vertices_coords[faces_vertices[val[0]][1]],
                             &vertices_coords[faces_vertices[val[0]][2]],
-                        ),
-                        points_cross(
+                        )) / 2.0,
+                        vec_length(&points_cross(
                             &vertices_coords[faces_vertices[val[1]][0]],
                             &vertices_coords[faces_vertices[val[1]][1]],
                             &vertices_coords[faces_vertices[val[1]][2]],
-                        ),
+                        )) / 2.0,
                     ],
                     assignment: edges_assignment[i].clone(),
                     edge_idx: i,
@@ -190,7 +211,7 @@ impl Fold {
                         faces_vertices[val[0]][face1_top_idx],
                         faces_vertices[val[1]][face2_top_idx],
                     ],
-                    target_angle: angle * std::f64::consts::PI / 180.0,
+                    target_angle: (angle * std::f64::consts::PI / 180.0) as f32,
                 });
             }
         }

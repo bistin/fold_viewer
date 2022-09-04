@@ -43,3 +43,7 @@ pub fn length(a: &[f32; 3], b: &[f32; 3]) -> f32 {
 
     (ab[0].powi(2) + ab[1].powi(2) + ab[2].powi(2)).sqrt()
 }
+
+pub fn scale(a: &[f32; 3], scalar: f32) -> [f32; 3] {
+    [a[0] * scalar, a[1] * scalar, a[2] * scalar]
+}
