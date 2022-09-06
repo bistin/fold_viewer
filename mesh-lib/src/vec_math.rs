@@ -1,12 +1,8 @@
 pub fn points_cross(a: &[f32; 3], b: &[f32; 3], c: &[f32; 3]) -> [f32; 3] {
-    let cb = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
-    let ab = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
 
-    [
-        cb[1] * ab[2] - cb[2] * ab[1],
-        cb[2] * ab[0] - cb[0] * ab[2],
-        cb[0] * ab[1] - cb[1] * ab[0],
-    ]
+    cross(&ab, &ac)
 }
 
 pub fn cross(a: &[f32; 3], b: &[f32; 3]) -> [f32; 3] {

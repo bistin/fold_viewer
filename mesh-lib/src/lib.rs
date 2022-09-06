@@ -88,31 +88,10 @@ impl Crease {
         vertices_coords: &Vec<[f32; 3]>,
         faces_vertices: &Vec<[usize; 3]>,
     ) -> f32 {
-        let val = &self.face_idxs;
+        let [normal1, normal2] = self.get_normals(vertices_coords, faces_vertices);
 
-        let normal1 = normalize(&points_cross(
-            &vertices_coords[faces_vertices[val[0]][0]],
-            &vertices_coords[faces_vertices[val[0]][1]],
-            &vertices_coords[faces_vertices[val[0]][2]],
-        ));
-
-        let normal2 = normalize(&points_cross(
-            &vertices_coords[faces_vertices[val[1]][0]],
-            &vertices_coords[faces_vertices[val[1]][1]],
-            &vertices_coords[faces_vertices[val[1]][2]],
-        ));
-
-        let mut dot_normals = dot(&normal1, &normal2);
-        dot_normals = if dot_normals > 1.0 {
-            1.0
-        } else if dot_normals < -1.0 {
-            -1.0
-        } else {
-            dot_normals
-        };
-
+        let dot_normals = dot(&normal1, &normal2);
         let crease_vector = self.get_edge_vector(vertices_coords);
-
         dot(&cross(&normal1, &crease_vector), &normal2).atan2(dot_normals)
     }
 }
