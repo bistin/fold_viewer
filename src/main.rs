@@ -107,8 +107,8 @@ fn joint_animation(
     mut velocity: ResMut<Vec<[f32; 3]>>,
 ) {
     let fold_ratio = 1.00;
-    let crease_crease_stiffness = 0.7;
-    let flat_crease_stiffness = 0.7;
+    let crease_crease_stiffness = 0.35;
+    let flat_crease_stiffness = 0.35;
     let axial_stiffness = 20.0;
     let percent_damping = 0.45;
     let ref_fold = &mut *fold_obj;
@@ -191,17 +191,17 @@ fn joint_animation(
         //     rxn_force_scale = ;
         // }
 
-        if ci > 0 {
-            println!(
-                "index= {}, theta = {}, target = {}, normal1={:?}, normal2={:?}, stiff ={}",
-                ci,
-                theta,
-                fold_ratio * crease.target_angle,
-                &normal1,
-                &normal2,
-                rxn_force_scale
-            );
-        }
+        // if ci > 0 {
+        //     println!(
+        //         "index= {}, theta = {}, target = {}, normal1={:?}, normal2={:?}, stiff ={}",
+        //         ci,
+        //         theta,
+        //         fold_ratio * crease.target_angle,
+        //         &normal1,
+        //         &normal2,
+        //         rxn_force_scale
+        //     );
+        // }
 
         let node1_f = scale(
             &normal1,
@@ -221,28 +221,36 @@ fn joint_animation(
         f[vertices_idxs[1]][2] -= node2_f[2];
 
         let edge_vertices_idxs = crease.edge_vertices_idxs;
+        let [c00, c01] = crease.get_0_coef(&positions);
+        let [c10, c11] = crease.get_1_coef(&positions);
 
-        f[edge_vertices_idxs[0]][0] += (node1_f[0] + node2_f[0]) / 2.0;
-        f[edge_vertices_idxs[0]][1] += (node1_f[1] + node2_f[1]) / 2.0;
-        f[edge_vertices_idxs[0]][2] += (node1_f[2] + node2_f[2]) / 2.0;
+        f[edge_vertices_idxs[0]][0] +=
+            c10 / (c00 + c10) * node1_f[0] + c11 / (c01 + c11) * node2_f[0];
+        f[edge_vertices_idxs[0]][1] +=
+            c10 / (c00 + c10) * node1_f[1] + c11 / (c01 + c11) * node2_f[1];
+        f[edge_vertices_idxs[0]][2] +=
+            c10 / (c00 + c10) * node1_f[2] + c11 / (c01 + c11) * node2_f[2];
 
-        f[edge_vertices_idxs[1]][0] += (node1_f[0] + node2_f[0]) / 2.0;
-        f[edge_vertices_idxs[1]][1] += (node1_f[1] + node2_f[1]) / 2.0;
-        f[edge_vertices_idxs[1]][2] += (node1_f[2] + node2_f[2]) / 2.0;
+        f[edge_vertices_idxs[1]][0] +=
+            c00 / (c00 + c10) * node1_f[0] + c01 / (c01 + c11) * node2_f[0];
+        f[edge_vertices_idxs[1]][1] +=
+            c00 / (c00 + c10) * node1_f[1] + c01 / (c01 + c11) * node2_f[1];
+        f[edge_vertices_idxs[1]][2] +=
+            c00 / (c00 + c10) * node1_f[2] + c01 / (c01 + c11) * node2_f[2];
     }
 
     //println!("{:?}", edge_lengths);
 
     // let edge = &fold_obj.edges_vertices;
     //let positions = &mut *fold_obj.vertices_coords;
-    let delta_t = 1.0 / 100.0;
-    let decay = 1.0;
+    let delta_t = 1.0 / 10.0;
+    let decay = 0.9;
     for (i, position) in &mut positions.iter_mut().enumerate() {
         //let a0 = f[i][0] / 1.0;
 
-        velocity[i][0] = velocity[i][0] * decay + f[i][0] / 90.0 * delta_t;
-        velocity[i][1] = velocity[i][1] * decay + f[i][1] / 90.0 * delta_t;
-        velocity[i][2] = velocity[i][2] * decay + f[i][2] / 90.0 * delta_t;
+        velocity[i][0] = velocity[i][0] * decay + f[i][0] / 10.0 * delta_t;
+        velocity[i][1] = velocity[i][1] * decay + f[i][1] / 10.0 * delta_t;
+        velocity[i][2] = velocity[i][2] * decay + f[i][2] / 10.0 * delta_t;
 
         position[0] += velocity[i][0] * delta_t;
         position[1] += velocity[i][1] * delta_t;
