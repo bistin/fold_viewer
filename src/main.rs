@@ -107,8 +107,8 @@ fn joint_animation(
     mut velocity: ResMut<Vec<[f32; 3]>>,
 ) {
     let fold_ratio = 1.00;
-    let crease_crease_stiffness = 0.35;
-    let flat_crease_stiffness = 0.35;
+    let crease_crease_stiffness = 0.95;
+    let flat_crease_stiffness = 0.95;
     let axial_stiffness = 20.0;
     let percent_damping = 0.45;
     let ref_fold = &mut *fold_obj;
@@ -243,14 +243,14 @@ fn joint_animation(
 
     // let edge = &fold_obj.edges_vertices;
     //let positions = &mut *fold_obj.vertices_coords;
-    let delta_t = 1.0 / 10.0;
-    let decay = 0.9;
+    let delta_t = 1.0 / 44.0;
+    let decay = 1.0;
     for (i, position) in &mut positions.iter_mut().enumerate() {
         //let a0 = f[i][0] / 1.0;
 
-        velocity[i][0] = velocity[i][0] * decay + f[i][0] / 10.0 * delta_t;
-        velocity[i][1] = velocity[i][1] * decay + f[i][1] / 10.0 * delta_t;
-        velocity[i][2] = velocity[i][2] * decay + f[i][2] / 10.0 * delta_t;
+        velocity[i][0] = velocity[i][0] * decay + f[i][0] / 1.0 * delta_t;
+        velocity[i][1] = velocity[i][1] * decay + f[i][1] / 1.0 * delta_t;
+        velocity[i][2] = velocity[i][2] * decay + f[i][2] / 1.0 * delta_t;
 
         position[0] += velocity[i][0] * delta_t;
         position[1] += velocity[i][1] * delta_t;
