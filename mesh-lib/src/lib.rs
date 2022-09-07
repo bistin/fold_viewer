@@ -25,6 +25,7 @@ pub struct Fold {
     pub edges_vertices: Vec<[usize; 2]>,
     pub edges_assignment: Vec<String>,
     pub faces_vertices: Vec<[usize; 3]>,
+    dt: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -134,6 +135,35 @@ impl Fold {
             ret_vec.push(points_length(&v0, &v1));
         }
         ret_vec
+    }
+
+    pub fn get_dt(&mut self, axial_stiffness: f32) -> f32 {
+        match self.dt {
+            Some(x) => x,
+            None => {
+                let edges_vertices = &self.edges_vertices;
+                let positions = &self.vertices_coords;
+                let mut max_freq = 0.0;
+                for idxs in edges_vertices.iter() {
+                    let x0 = positions[idxs[0]];
+                    let x1 = positions[idxs[1]];
+                    let x01 = [x1[0] - x0[0], x1[1] - x0[1], x1[2] - x0[2]];
+
+                    let length = vec_length(&x01);
+
+                    let k = axial_stiffness / length;
+                    let natural_freq = k.sqrt();
+
+                    if natural_freq > max_freq {
+                        max_freq = natural_freq;
+                    }
+                }
+
+                let dt = 1.0 / (2.0 * std::f32::consts::PI * max_freq) * 0.9;
+                self.dt = Some(dt);
+                dt
+            }
+        }
     }
 
     pub fn get_creases(&self) -> Vec<Crease> {

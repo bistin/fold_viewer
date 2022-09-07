@@ -13,15 +13,18 @@ use std::fs;
 use bevy::render::mesh::{Indices, Mesh, VertexAttributeValues};
 
 fn main() {
-    let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
-    let fold: Fold = serde_json::from_str(&data).unwrap();
+    let axial_stiffness = 20.0;
+    let data = fs::read_to_string("./mesh-lib/src/crand.fold").unwrap();
+    let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
     let edge_lengths = fold.get_edge_length();
     let positions = &fold.vertices_coords;
     let velocity = vec![[0.0f32, 0.0f32, 0.0f32]; positions.len()];
-    let count = 0;
+    let dt = fold.get_dt(axial_stiffness);
+
+    println!("{}", dt);
     App::new()
-        .insert_resource(count)
+        .insert_resource(dt)
         .insert_resource(fold)
         .insert_resource(creases)
         .insert_resource(edge_lengths)
@@ -99,7 +102,7 @@ fn setup(
 }
 
 fn joint_animation(
-    mut count: ResMut<i32>,
+    dt: Res<f32>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut fold_obj: ResMut<Fold>,
     mut creases: ResMut<Vec<Crease>>,
@@ -107,8 +110,8 @@ fn joint_animation(
     mut velocity: ResMut<Vec<[f32; 3]>>,
 ) {
     let fold_ratio = 1.00;
-    let crease_crease_stiffness = 0.95;
-    let flat_crease_stiffness = 0.95;
+    let crease_crease_stiffness = 0.70;
+    let flat_crease_stiffness = 0.70;
     let axial_stiffness = 20.0;
     let percent_damping = 0.45;
     let ref_fold = &mut *fold_obj;
@@ -118,8 +121,6 @@ fn joint_animation(
     let faces_vertices = &mut ref_fold.faces_vertices;
     let positions = &mut ref_fold.vertices_coords;
     let mut f = vec![vec![0.0f32; 3]; length];
-
-    *count = *count + 1;
 
     let edges_vertices = &mut ref_fold.edges_vertices;
     for (i, idxs) in edges_vertices.iter().enumerate() {
@@ -169,7 +170,7 @@ fn joint_animation(
         // }
         let [normal2, normal1] = crease.get_normals(positions, faces_vertices);
         let vertices_idxs = crease.top_vertices_idxs;
-        let mut theta = crease.get_theta(positions, faces_vertices);
+        let theta = crease.get_theta(positions, faces_vertices);
         let mut diff = theta - fold_ratio * crease.target_angle;
 
         if diff < -5.0 {
@@ -177,9 +178,11 @@ fn joint_animation(
         } else if diff > 5.0 {
             diff -= std::f32::consts::PI * 2.0;
         }
-        theta = diff + fold_ratio * crease.target_angle;
+        // theta = diff + fold_ratio * crease.target_angle;
         let crease_stiffness = if crease.target_angle == 0.0 {
             flat_crease_stiffness
+        } else if crease.target_angle <= 0.0 {
+            3.0 * crease_crease_stiffness
         } else {
             crease_crease_stiffness
         };
@@ -243,7 +246,7 @@ fn joint_animation(
 
     // let edge = &fold_obj.edges_vertices;
     //let positions = &mut *fold_obj.vertices_coords;
-    let delta_t = 1.0 / 44.0;
+    let delta_t = *dt;
     let decay = 1.0;
     for (i, position) in &mut positions.iter_mut().enumerate() {
         //let a0 = f[i][0] / 1.0;
