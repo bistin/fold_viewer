@@ -1,4 +1,3 @@
-use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use bevy::render::mesh::PrimitiveTopology;
 use bevy_inspector_egui::WorldInspectorPlugin;
@@ -7,10 +6,9 @@ use smooth_bevy_cameras::controllers::orbit::{
 };
 use smooth_bevy_cameras::LookTransformPlugin;
 
-use mesh_lib::vec_math::{normalize, points_cross, scale, vec_length};
+use mesh_lib::vec_math::{normalize, scale, vec_length};
 use mesh_lib::{Crease, Fold};
 use std::fs;
-use std::time::Duration;
 
 use bevy::render::mesh::{Indices, Mesh, VertexAttributeValues};
 
@@ -105,14 +103,14 @@ fn joint_animation(
     mut meshes: ResMut<Assets<Mesh>>,
     mut fold_obj: ResMut<Fold>,
     mut creases: ResMut<Vec<Crease>>,
-    mut edge_lengths: ResMut<Vec<f32>>,
+    edge_lengths: Res<Vec<f32>>,
     mut velocity: ResMut<Vec<[f32; 3]>>,
 ) {
-    let fold_ratio = 0.7;
-    let m_crease_stiffness = 0.7;
-    let flat_crease_stiffness = 1.0;
-    let v_crease_stiffness = 0.7;
+    let fold_ratio = 1.00;
+    let crease_crease_stiffness = 0.7;
+    let flat_crease_stiffness = 0.7;
     let axial_stiffness = 20.0;
+    let percent_damping = 0.45;
     let ref_fold = &mut *fold_obj;
     let ref_creases = &mut *creases;
     // calculate all normals
@@ -125,14 +123,15 @@ fn joint_animation(
 
     let edges_vertices = &mut ref_fold.edges_vertices;
     for (i, idxs) in edges_vertices.iter().enumerate() {
-        let v0 = positions[idxs[0]];
-        let v1 = positions[idxs[1]];
-        let mut v01 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+        let x0 = positions[idxs[0]];
+        let x1 = positions[idxs[1]];
+        let mut x01 = [x1[0] - x0[0], x1[1] - x0[1], x1[2] - x0[2]];
 
-        let new_length = vec_length(&v01);
+        let new_length = vec_length(&x01);
         let diff = new_length - edge_lengths[i];
-
-        let force = axial_stiffness * diff / edge_lengths[i];
+        let k = axial_stiffness / edge_lengths[i];
+        let d = percent_damping * 2.0 * (k * 1.0).sqrt();
+        let force = k * diff * 1.0;
         // println!(
         //     "v0={:?}, v1={:?},v01={},{},{},new={}, origin={}, force={}",
         //     v0, v1, v01[0], v01[1], v01[2], new_length, edge_lengths[i], force
@@ -141,32 +140,53 @@ fn joint_animation(
         if f32::is_nan(force) || f32::is_infinite(force) {
             panic!("err");
         }
-        v01 = normalize(&v01);
-        f[idxs[0]][0] += v01[0] * force;
-        f[idxs[0]][1] += v01[1] * force;
-        f[idxs[0]][2] += v01[2] * force;
+        x01 = normalize(&x01);
+        f[idxs[0]][0] += x01[0] * force;
+        f[idxs[0]][1] += x01[1] * force;
+        f[idxs[0]][2] += x01[2] * force;
 
-        f[idxs[1]][0] -= v01[0] * force;
-        f[idxs[1]][1] -= v01[1] * force;
-        f[idxs[1]][2] -= v01[2] * force;
+        f[idxs[1]][0] -= x01[0] * force;
+        f[idxs[1]][1] -= x01[1] * force;
+        f[idxs[1]][2] -= x01[2] * force;
+
+        let v0 = velocity[idxs[0]];
+        let v1 = velocity[idxs[1]];
+
+        let v01 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+
+        f[idxs[0]][0] += v01[0] * d;
+        f[idxs[0]][1] += v01[1] * d;
+        f[idxs[0]][2] += v01[2] * d;
+
+        f[idxs[1]][0] -= v01[0] * d;
+        f[idxs[1]][1] -= v01[1] * d;
+        f[idxs[1]][2] -= v01[2] * d;
     }
 
     for (ci, crease) in ref_creases.iter().enumerate() {
         // if (ci as i32) % 2 != *count % 2 {
         //     continue;
         // }
-        let normals = crease.get_normals(positions, faces_vertices);
+        let [normal2, normal1] = crease.get_normals(positions, faces_vertices);
         let vertices_idxs = crease.top_vertices_idxs;
-        let diff = crease.get_theta(positions, faces_vertices) - fold_ratio * crease.target_angle;
-        //let face_dist = crease.init_face_dist;
-        let crease_stiffness = if crease.target_angle > 0.0 {
-            v_crease_stiffness
-        } else if crease.target_angle < 0.0 {
-            m_crease_stiffness
-        } else {
+        let mut theta = crease.get_theta(positions, faces_vertices);
+        let mut diff = theta - fold_ratio * crease.target_angle;
+
+        if diff < -5.0 {
+            diff += std::f32::consts::PI * 2.0;
+        } else if diff > 5.0 {
+            diff -= std::f32::consts::PI * 2.0;
+        }
+        theta = diff + fold_ratio * crease.target_angle;
+        let crease_stiffness = if crease.target_angle == 0.0 {
             flat_crease_stiffness
+        } else {
+            crease_crease_stiffness
         };
-        let rxn_force_scale = crease.origin_lentgh * crease_stiffness * diff * -1.0;
+
+        let edge_length = vec_length(&crease.get_edge_vector(positions));
+        let k = edge_length * crease_stiffness;
+        let rxn_force_scale = k * diff * -1.0;
         // if crease.target_angle == 0.0 {
         //     rxn_force_scale = ;
         // }
@@ -175,41 +195,27 @@ fn joint_animation(
             println!(
                 "index= {}, theta = {}, target = {}, normal1={:?}, normal2={:?}, stiff ={}",
                 ci,
-                crease.get_theta(positions, faces_vertices),
+                theta,
                 fold_ratio * crease.target_angle,
-                &normals[0],
-                &normals[1],
+                &normal1,
+                &normal2,
                 rxn_force_scale
             );
         }
 
-        if ci > 7 {
-            //    break;
-        }
-
-        let crease_stiffness = if crease.target_angle > 0.0 {
-            v_crease_stiffness
-        } else if crease.target_angle < 0.0 {
-            m_crease_stiffness
-        } else {
-            flat_crease_stiffness
-        };
-        let rxn_force_scale = crease.origin_lentgh * crease_stiffness * diff * 1.0;
-
         let node1_f = scale(
-            &normals[0],
-            2.0 / (vec_length(&normals[0]) / vec_length(&crease.get_edge_vector(positions)))
-                * rxn_force_scale,
+            &normal1,
+            2.0 / (vec_length(&normal1) / edge_length) * rxn_force_scale,
+        );
+
+        let node2_f = scale(
+            &normal2,
+            2.0 / (vec_length(&normal2) / edge_length) * rxn_force_scale,
         );
         f[vertices_idxs[0]][0] -= node1_f[0];
         f[vertices_idxs[0]][1] -= node1_f[1];
         f[vertices_idxs[0]][2] -= node1_f[2];
 
-        let node2_f = scale(
-            &normals[1],
-            2.0 / (vec_length(&normals[1]) / vec_length(&crease.get_edge_vector(positions)))
-                * rxn_force_scale,
-        );
         f[vertices_idxs[1]][0] -= node2_f[0];
         f[vertices_idxs[1]][1] -= node2_f[1];
         f[vertices_idxs[1]][2] -= node2_f[2];
@@ -229,14 +235,14 @@ fn joint_animation(
 
     // let edge = &fold_obj.edges_vertices;
     //let positions = &mut *fold_obj.vertices_coords;
-    let delta_t = 1.0 / 10.0;
-    let decay = 0.2;
+    let delta_t = 1.0 / 100.0;
+    let decay = 1.0;
     for (i, position) in &mut positions.iter_mut().enumerate() {
         //let a0 = f[i][0] / 1.0;
 
-        velocity[i][0] = velocity[i][0] * decay + f[i][0] / 60.0 * delta_t;
-        velocity[i][1] = velocity[i][1] * decay + f[i][1] / 60.0 * delta_t;
-        velocity[i][2] = velocity[i][2] * decay + f[i][2] / 60.0 * delta_t;
+        velocity[i][0] = velocity[i][0] * decay + f[i][0] / 90.0 * delta_t;
+        velocity[i][1] = velocity[i][1] * decay + f[i][1] / 90.0 * delta_t;
+        velocity[i][2] = velocity[i][2] * decay + f[i][2] / 90.0 * delta_t;
 
         position[0] += velocity[i][0] * delta_t;
         position[1] += velocity[i][1] * delta_t;

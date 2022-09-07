@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 pub mod vec_math;
 
-use crate::vec_math::{cross, dot, normalize, points_cross, points_length, vec_length};
+use crate::vec_math::{cross, dot, normalize, points_cross, points_length, scale, sub, vec_length};
 
 fn map_key(a: usize, b: usize) -> String {
     if a < b {
@@ -44,24 +44,40 @@ pub struct Crease {
 }
 
 impl Crease {
+    pub fn get_0_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 2] {
+        let p0 = vertices_coords[self.edge_vertices_idxs[0]];
+        let t0 = vertices_coords[self.top_vertices_idxs[0]];
+        let t1 = vertices_coords[self.top_vertices_idxs[1]];
+
+        let crease = normalize(&self.get_edge_vector(vertices_coords));
+
+        let v0 = normalize(&sub(&t0, &p0));
+        let v1 = normalize(&sub(&t1, &p0));
+
+        [dot(&v0, &crease), dot(&v1, &crease)]
+    }
+
+    pub fn get_1_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 2] {
+        let p1 = vertices_coords[self.edge_vertices_idxs[1]];
+        let t0 = vertices_coords[self.top_vertices_idxs[0]];
+        let t1 = vertices_coords[self.top_vertices_idxs[1]];
+
+        let crease = scale(&normalize(&self.get_edge_vector(vertices_coords)), -1.0);
+
+        let v0 = normalize(&sub(&t0, &p1));
+        let v1 = normalize(&sub(&t1, &p1));
+
+        [dot(&v0, &crease), dot(&v1, &crease)]
+    }
+
     pub fn get_edge_vector(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 3] {
-        // v0 -> v1
+        // v01 = v1 - v0
         let edge_vertices_idxs = &self.edge_vertices_idxs;
         let a = vertices_coords[edge_vertices_idxs[1]];
         let b = vertices_coords[edge_vertices_idxs[0]];
-        [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+        sub(&a, &b)
     }
 
-    // var crease = creases[j];
-    //  var normal1 = normals[crease.face1Index];
-    //  var normal2 = normals[crease.face2Index];
-    //  var dotNormals = normal1.dot(normal2);
-    //  if (dotNormals < -1.0) dotNormals = -1.0;
-    //  else if (dotNormals > 1.0) dotNormals = 1.0;
-
-    //  var creaseVector = crease.getVector().normalize();
-    //  //https://math.stackexchange.com/questions/47059/how-do-i-calculate-a-dihedral-angle-given-cartesian-coordinates
-    //  var theta = Math.atan2((normal1.clone().cross(creaseVector)).dot(normal2), dotNormals);
     pub fn get_normals(
         &self,
         vertices_coords: &Vec<[f32; 3]>,
@@ -91,8 +107,11 @@ impl Crease {
         let [normal1, normal2] = self.get_normals(vertices_coords, faces_vertices);
 
         let dot_normals = dot(&normal1, &normal2);
-        let crease_vector = self.get_edge_vector(vertices_coords);
+        let crease_vector = normalize(&self.get_edge_vector(vertices_coords));
         dot(&cross(&normal1, &crease_vector), &normal2).atan2(dot_normals)
+
+        //dot_normals.atan2(dot(&cross(&normal1, &crease_vector), &normal2))
+        //dot_normals.acos() - PI / 2
     }
 }
 
@@ -205,16 +224,20 @@ mod tests {
 
     #[test]
     fn test_parser() {
-        let data = fs::read_to_string("./src/crand.fold").unwrap();
+        let data = fs::read_to_string("./src/bird.fold").unwrap();
         let p: Fold = serde_json::from_str(&data).unwrap();
         let vertices_coords = &p.vertices_coords;
         let faces_vertices = &p.faces_vertices;
         //println!("{:?}", p);
         let creases = p.get_creases();
 
-        for crease in creases {
+        for crease in &creases {
             let theta1 = crease.get_theta(vertices_coords, faces_vertices);
-            println!("{:?}", theta1);
+            println!(
+                "edge={:?}, tops={:?}",
+                crease.edge_vertices_idxs, crease.top_vertices_idxs
+            );
         }
+        println!("len={}", creases.len())
     }
 }
