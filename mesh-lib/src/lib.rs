@@ -45,7 +45,8 @@ pub struct Crease {
 }
 
 impl Crease {
-    pub fn get_0_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 2] {
+    pub fn get_0_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
+        let threshold = 0.0000001;
         let p0 = vertices_coords[self.edge_vertices_idxs[0]];
         let t0 = vertices_coords[self.top_vertices_idxs[0]];
         let t1 = vertices_coords[self.top_vertices_idxs[1]];
@@ -55,10 +56,26 @@ impl Crease {
         let v0 = normalize(&sub(&t0, &p0));
         let v1 = normalize(&sub(&t1, &p0));
 
-        [dot(&v0, &crease), dot(&v1, &crease)]
+        let mut cos0 = dot(&v0, &crease);
+        let mut cos1 = dot(&v1, &crease);
+
+        cos0 = if cos0 < threshold { threshold } else { cos0 };
+        cos1 = if cos1 < threshold { threshold } else { cos1 };
+
+        let sin0 = (1.0 - cos0 * cos0).sqrt();
+        let sin1 = (1.0 - cos1 * cos1).sqrt();
+
+        [
+            cos0,
+            cos1,
+            vec_length(&sub(&t0, &p0)) * sin0 * 1.0,
+            vec_length(&sub(&t1, &p0)) * sin1 * 1.0,
+            //1.0, 1.0,
+        ]
     }
 
-    pub fn get_1_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 2] {
+    pub fn get_1_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
+        let threshold = 0.0000001;
         let p1 = vertices_coords[self.edge_vertices_idxs[1]];
         let t0 = vertices_coords[self.top_vertices_idxs[0]];
         let t1 = vertices_coords[self.top_vertices_idxs[1]];
@@ -68,7 +85,21 @@ impl Crease {
         let v0 = normalize(&sub(&t0, &p1));
         let v1 = normalize(&sub(&t1, &p1));
 
-        [dot(&v0, &crease), dot(&v1, &crease)]
+        let mut cos0 = dot(&v0, &crease);
+        let mut cos1 = dot(&v1, &crease);
+
+        cos0 = if cos0 < threshold { threshold } else { cos0 };
+        cos1 = if cos1 < threshold { threshold } else { cos1 };
+
+        let sin0 = (1.0 - cos0 * cos0).sqrt();
+        let sin1 = (1.0 - cos1 * cos1).sqrt();
+
+        [
+            cos0,
+            cos1,
+            vec_length(&sub(&t0, &p1)) * sin0,
+            vec_length(&sub(&t1, &p1)) * sin1,
+        ]
     }
 
     pub fn get_edge_vector(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 3] {

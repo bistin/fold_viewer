@@ -14,7 +14,7 @@ use bevy::render::mesh::{Indices, Mesh, VertexAttributeValues};
 
 fn main() {
     let axial_stiffness = 20.0;
-    let data = fs::read_to_string("./mesh-lib/src/crand.fold").unwrap();
+    let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
     let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
     let edge_lengths = fold.get_edge_length();
@@ -109,9 +109,9 @@ fn joint_animation(
     edge_lengths: Res<Vec<f32>>,
     mut velocity: ResMut<Vec<[f32; 3]>>,
 ) {
-    let fold_ratio = 1.00;
-    let crease_crease_stiffness = 0.70;
-    let flat_crease_stiffness = 0.70;
+    let fold_ratio = 1.0;
+    let crease_crease_stiffness = 0.7;
+    let flat_crease_stiffness = 0.7;
     let axial_stiffness = 20.0;
     let percent_damping = 0.45;
     let ref_fold = &mut *fold_obj;
@@ -164,7 +164,7 @@ fn joint_animation(
         f[idxs[1]][2] -= v01[2] * d;
     }
 
-    for (ci, crease) in ref_creases.iter().enumerate() {
+    for (_ci, crease) in ref_creases.iter().enumerate() {
         // if (ci as i32) % 2 != *count % 2 {
         //     continue;
         // }
@@ -181,40 +181,20 @@ fn joint_animation(
         // theta = diff + fold_ratio * crease.target_angle;
         let crease_stiffness = if crease.target_angle == 0.0 {
             flat_crease_stiffness
-        } else if crease.target_angle <= 0.0 {
-            3.0 * crease_crease_stiffness
         } else {
             crease_crease_stiffness
         };
 
-        let edge_length = vec_length(&crease.get_edge_vector(positions));
+        let edge_length = edge_lengths[crease.edge_idx];
         let k = edge_length * crease_stiffness;
         let rxn_force_scale = k * diff * -1.0;
-        // if crease.target_angle == 0.0 {
-        //     rxn_force_scale = ;
-        // }
 
-        // if ci > 0 {
-        //     println!(
-        //         "index= {}, theta = {}, target = {}, normal1={:?}, normal2={:?}, stiff ={}",
-        //         ci,
-        //         theta,
-        //         fold_ratio * crease.target_angle,
-        //         &normal1,
-        //         &normal2,
-        //         rxn_force_scale
-        //     );
-        // }
+        let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
+        let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
 
-        let node1_f = scale(
-            &normal1,
-            2.0 / (vec_length(&normal1) / edge_length) * rxn_force_scale,
-        );
+        let node1_f = scale(&normal1, 1.0 / h0 * rxn_force_scale);
+        let node2_f = scale(&normal2, 1.0 / h1 * rxn_force_scale);
 
-        let node2_f = scale(
-            &normal2,
-            2.0 / (vec_length(&normal2) / edge_length) * rxn_force_scale,
-        );
         f[vertices_idxs[0]][0] -= node1_f[0];
         f[vertices_idxs[0]][1] -= node1_f[1];
         f[vertices_idxs[0]][2] -= node1_f[2];
@@ -224,8 +204,6 @@ fn joint_animation(
         f[vertices_idxs[1]][2] -= node2_f[2];
 
         let edge_vertices_idxs = crease.edge_vertices_idxs;
-        let [c00, c01] = crease.get_0_coef(&positions);
-        let [c10, c11] = crease.get_1_coef(&positions);
 
         f[edge_vertices_idxs[0]][0] +=
             c10 / (c00 + c10) * node1_f[0] + c11 / (c01 + c11) * node2_f[0];
