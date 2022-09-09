@@ -69,20 +69,19 @@ impl Crease {
             cos1,
             vec_length(&sub(&t0, &p0)) * sin0 * 1.0,
             vec_length(&sub(&t1, &p0)) * sin1 * 1.0,
-            //1.0, 1.0,
         ]
     }
 
     pub fn get_1_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
         let threshold = 0.0000000001;
-        let p1 = vertices_coords[self.edge_vertices_idxs[1]];
+        let p0 = vertices_coords[self.edge_vertices_idxs[1]];
         let t0 = vertices_coords[self.top_vertices_idxs[0]];
         let t1 = vertices_coords[self.top_vertices_idxs[1]];
 
         let crease = scale(&normalize(&self.get_edge_vector(vertices_coords)), -1.0);
 
-        let v0 = normalize(&sub(&t0, &p1));
-        let v1 = normalize(&sub(&t1, &p1));
+        let v0 = normalize(&sub(&t0, &p0));
+        let v1 = normalize(&sub(&t1, &p0));
 
         let mut cos0 = dot(&v0, &crease);
         let mut cos1 = dot(&v1, &crease);
@@ -96,8 +95,9 @@ impl Crease {
         [
             cos0,
             cos1,
-            vec_length(&sub(&t0, &p1)) * sin0,
-            vec_length(&sub(&t1, &p1)) * sin1,
+            vec_length(&sub(&t0, &p0)) * sin0 * 1.0,
+            vec_length(&sub(&t1, &p0)) * sin1 * 1.0,
+            //1.0, 1.0,
         ]
     }
 
@@ -141,7 +141,7 @@ impl Crease {
         let crease_vector = normalize(&self.get_edge_vector(vertices_coords));
         dot(&cross(&normal0, &crease_vector), &normal1).atan2(dot_normals)
 
-        //dot_normals.atan2(dot(&cross(&normal1, &crease_vector), &normal2))
+        // dot_normals.atan2(dot(&cross(&normal0, &crease_vector), &normal1))
         //dot_normals.acos() - PI / 2
     }
 }
