@@ -1,6 +1,6 @@
 pub fn points_cross(a: &[f32; 3], b: &[f32; 3], c: &[f32; 3]) -> [f32; 3] {
-    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    let ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let ab = sub(&b, &a);
+    let ac = sub(&c, &a);
 
     cross(&ac, &ab)
 }
@@ -19,6 +19,10 @@ pub fn dot(a: &[f32; 3], b: &[f32; 3]) -> f32 {
 
 pub fn sub(a: &[f32; 3], b: &[f32; 3]) -> [f32; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+pub fn add(a: &[f32; 3], b: &[f32; 3]) -> [f32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
 
 pub fn normalize(vector: &[f32; 3]) -> [f32; 3] {

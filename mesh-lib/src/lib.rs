@@ -36,7 +36,6 @@ pub struct Crease {
     pub origin_lentgh: f32,
     pub target_angle: f32,
     pub assignment: String,
-    pub init_face_dist: [f32; 2],
     // face index
     pub face_idxs: [usize; 2],
 
@@ -46,7 +45,7 @@ pub struct Crease {
 
 impl Crease {
     pub fn get_0_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
-        let threshold = 0.0000001;
+        let threshold = 0.0000000001;
         let p0 = vertices_coords[self.edge_vertices_idxs[0]];
         let t0 = vertices_coords[self.top_vertices_idxs[0]];
         let t1 = vertices_coords[self.top_vertices_idxs[1]];
@@ -75,7 +74,7 @@ impl Crease {
     }
 
     pub fn get_1_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
-        let threshold = 0.0000001;
+        let threshold = 0.0000000001;
         let p1 = vertices_coords[self.edge_vertices_idxs[1]];
         let t0 = vertices_coords[self.top_vertices_idxs[0]];
         let t1 = vertices_coords[self.top_vertices_idxs[1]];
@@ -117,18 +116,18 @@ impl Crease {
     ) -> [[f32; 3]; 2] {
         let val = &self.face_idxs;
 
-        let normal1 = normalize(&points_cross(
+        let normal0 = normalize(&points_cross(
             &vertices_coords[faces_vertices[val[0]][0]],
             &vertices_coords[faces_vertices[val[0]][1]],
             &vertices_coords[faces_vertices[val[0]][2]],
         ));
 
-        let normal2 = normalize(&points_cross(
+        let normal1 = normalize(&points_cross(
             &vertices_coords[faces_vertices[val[1]][0]],
             &vertices_coords[faces_vertices[val[1]][1]],
             &vertices_coords[faces_vertices[val[1]][2]],
         ));
-        [normal1, normal2]
+        [normal0, normal1]
     }
 
     pub fn get_theta(
@@ -136,24 +135,17 @@ impl Crease {
         vertices_coords: &Vec<[f32; 3]>,
         faces_vertices: &Vec<[usize; 3]>,
     ) -> f32 {
-        let [normal1, normal2] = self.get_normals(vertices_coords, faces_vertices);
+        let [normal0, normal1] = self.get_normals(vertices_coords, faces_vertices);
 
-        let dot_normals = dot(&normal1, &normal2);
+        let dot_normals = dot(&normal0, &normal1);
         let crease_vector = normalize(&self.get_edge_vector(vertices_coords));
-        dot(&cross(&normal1, &crease_vector), &normal2).atan2(dot_normals)
+        dot(&cross(&normal0, &crease_vector), &normal1).atan2(dot_normals)
 
         //dot_normals.atan2(dot(&cross(&normal1, &crease_vector), &normal2))
         //dot_normals.acos() - PI / 2
     }
 }
 
-// for (var i=0;i<fold.edges_assignment.length;i++){
-//      var assignment = fold.edges_assignment[i];
-//      if (assignment == "M") foldAngles.push(-180);
-//      else if (assignment == "V") foldAngles.push(180);
-//      else if (assignment == "F") foldAngles.push(0);
-//      else foldAngles.push(null);
-//  }
 impl Fold {
     // face1Ind, vertInd, face2Ind, ver2Ind, edgeInd, angle
     pub fn get_edge_length(&self) -> Vec<f32> {
@@ -234,12 +226,12 @@ impl Fold {
             };
 
             if is_crease {
-                let face1_top_idx = faces_vertices[val[0]]
+                let face0_top_idx = faces_vertices[val[0]]
                     .iter()
                     .position(|&x| x != idxs[0] && x != idxs[1])
                     .unwrap();
 
-                let face2_top_idx = faces_vertices[val[1]]
+                let face1_top_idx = faces_vertices[val[1]]
                     .iter()
                     .position(|&x| x != idxs[0] && x != idxs[1])
                     .unwrap();
@@ -252,23 +244,11 @@ impl Fold {
                     ),
                     face_idxs: [val[0], val[1]],
 
-                    init_face_dist: [
-                        vec_length(&points_cross(
-                            &vertices_coords[faces_vertices[val[0]][0]],
-                            &vertices_coords[faces_vertices[val[0]][1]],
-                            &vertices_coords[faces_vertices[val[0]][2]],
-                        )) / 2.0,
-                        vec_length(&points_cross(
-                            &vertices_coords[faces_vertices[val[1]][0]],
-                            &vertices_coords[faces_vertices[val[1]][1]],
-                            &vertices_coords[faces_vertices[val[1]][2]],
-                        )) / 2.0,
-                    ],
                     assignment: edges_assignment[i].clone(),
                     edge_idx: i,
                     top_vertices_idxs: [
-                        faces_vertices[val[0]][face1_top_idx],
-                        faces_vertices[val[1]][face2_top_idx],
+                        faces_vertices[val[0]][face0_top_idx],
+                        faces_vertices[val[1]][face1_top_idx],
                     ],
                     target_angle: (angle * std::f64::consts::PI / 180.0) as f32,
                 });

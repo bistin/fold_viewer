@@ -6,15 +6,15 @@ use smooth_bevy_cameras::controllers::orbit::{
 };
 use smooth_bevy_cameras::LookTransformPlugin;
 
-use mesh_lib::vec_math::{normalize, scale, vec_length};
+use mesh_lib::vec_math::{normalize, scale, sub, vec_length};
 use mesh_lib::{Crease, Fold};
 use std::fs;
 
-use bevy::render::mesh::{Indices, Mesh, VertexAttributeValues};
+use bevy::render::mesh::{Indices, Mesh};
 
 fn main() {
     let axial_stiffness = 20.0;
-    let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
+    let data = fs::read_to_string("./mesh-lib/src/bird2.fold").unwrap();
     let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
     let edge_lengths = fold.get_edge_length();
@@ -64,16 +64,9 @@ fn setup(
     mesh.set_indices(Some(Indices::U32(indices)));
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions.clone());
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    //mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0,1.0,1.0,1.0]);
-    //mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, VertexAttributeValues::Float32x2(uvs));
+    // mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0, 1.0, 1.0, 1.0]);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     // add entities to the world
-
-    // commands.spawn_bundle(PbrBundle {
-    //     mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
-    //     material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
-    //     ..default()
-    // });
 
     // plane
     commands.spawn_bundle(PbrBundle {
@@ -109,7 +102,7 @@ fn joint_animation(
     edge_lengths: Res<Vec<f32>>,
     mut velocity: ResMut<Vec<[f32; 3]>>,
 ) {
-    let fold_ratio = 1.0;
+    let fold_ratio = 0.6;
     let crease_crease_stiffness = 0.7;
     let flat_crease_stiffness = 0.7;
     let axial_stiffness = 20.0;
@@ -126,13 +119,13 @@ fn joint_animation(
     for (i, idxs) in edges_vertices.iter().enumerate() {
         let x0 = positions[idxs[0]];
         let x1 = positions[idxs[1]];
-        let mut x01 = [x1[0] - x0[0], x1[1] - x0[1], x1[2] - x0[2]];
+        let mut x01 = sub(&x1, &x0);
 
         let new_length = vec_length(&x01);
         let diff = new_length - edge_lengths[i];
         let k = axial_stiffness / edge_lengths[i];
         let d = percent_damping * 2.0 * (k * 1.0).sqrt();
-        let force = k * diff * 1.0;
+        let force = -1.0 * k * diff;
         // println!(
         //     "v0={:?}, v1={:?},v01={},{},{},new={}, origin={}, force={}",
         //     v0, v1, v01[0], v01[1], v01[2], new_length, edge_lengths[i], force
@@ -142,18 +135,17 @@ fn joint_animation(
             panic!("err");
         }
         x01 = normalize(&x01);
-        f[idxs[0]][0] += x01[0] * force;
-        f[idxs[0]][1] += x01[1] * force;
-        f[idxs[0]][2] += x01[2] * force;
+        f[idxs[0]][0] -= x01[0] * force;
+        f[idxs[0]][1] -= x01[1] * force;
+        f[idxs[0]][2] -= x01[2] * force;
 
-        f[idxs[1]][0] -= x01[0] * force;
-        f[idxs[1]][1] -= x01[1] * force;
-        f[idxs[1]][2] -= x01[2] * force;
+        f[idxs[1]][0] += x01[0] * force;
+        f[idxs[1]][1] += x01[1] * force;
+        f[idxs[1]][2] += x01[2] * force;
 
         let v0 = velocity[idxs[0]];
         let v1 = velocity[idxs[1]];
-
-        let v01 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+        let v01 = sub(&v1, &v0);
 
         f[idxs[0]][0] += v01[0] * d;
         f[idxs[0]][1] += v01[1] * d;
@@ -165,10 +157,7 @@ fn joint_animation(
     }
 
     for (_ci, crease) in ref_creases.iter().enumerate() {
-        // if (ci as i32) % 2 != *count % 2 {
-        //     continue;
-        // }
-        let [normal2, normal1] = crease.get_normals(positions, faces_vertices);
+        let [normal0, normal1] = crease.get_normals(positions, faces_vertices);
         let vertices_idxs = crease.top_vertices_idxs;
         let theta = crease.get_theta(positions, faces_vertices);
         let mut diff = theta - fold_ratio * crease.target_angle;
@@ -192,32 +181,32 @@ fn joint_animation(
         let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
         let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
 
-        let node1_f = scale(&normal1, 1.0 / h0 * rxn_force_scale);
-        let node2_f = scale(&normal2, 1.0 / h1 * rxn_force_scale);
+        let node0_f = scale(&normal0, 1.0 / h0 * rxn_force_scale);
+        let node1_f = scale(&normal1, 1.0 / h1 * rxn_force_scale);
 
-        f[vertices_idxs[0]][0] -= node1_f[0];
-        f[vertices_idxs[0]][1] -= node1_f[1];
-        f[vertices_idxs[0]][2] -= node1_f[2];
+        f[vertices_idxs[0]][0] -= node0_f[0];
+        f[vertices_idxs[0]][1] -= node0_f[1];
+        f[vertices_idxs[0]][2] -= node0_f[2];
 
-        f[vertices_idxs[1]][0] -= node2_f[0];
-        f[vertices_idxs[1]][1] -= node2_f[1];
-        f[vertices_idxs[1]][2] -= node2_f[2];
+        f[vertices_idxs[1]][0] -= node1_f[0];
+        f[vertices_idxs[1]][1] -= node1_f[1];
+        f[vertices_idxs[1]][2] -= node1_f[2];
 
         let edge_vertices_idxs = crease.edge_vertices_idxs;
 
         f[edge_vertices_idxs[0]][0] +=
-            c10 / (c00 + c10) * node1_f[0] + c11 / (c01 + c11) * node2_f[0];
+            c10 / (c00 + c10) * node0_f[0] + c11 / (c01 + c11) * node1_f[0];
         f[edge_vertices_idxs[0]][1] +=
-            c10 / (c00 + c10) * node1_f[1] + c11 / (c01 + c11) * node2_f[1];
+            c10 / (c00 + c10) * node0_f[1] + c11 / (c01 + c11) * node1_f[1];
         f[edge_vertices_idxs[0]][2] +=
-            c10 / (c00 + c10) * node1_f[2] + c11 / (c01 + c11) * node2_f[2];
+            c10 / (c00 + c10) * node0_f[2] + c11 / (c01 + c11) * node1_f[2];
 
         f[edge_vertices_idxs[1]][0] +=
-            c00 / (c00 + c10) * node1_f[0] + c01 / (c01 + c11) * node2_f[0];
+            c00 / (c00 + c10) * node0_f[0] + c01 / (c01 + c11) * node1_f[0];
         f[edge_vertices_idxs[1]][1] +=
-            c00 / (c00 + c10) * node1_f[1] + c01 / (c01 + c11) * node2_f[1];
+            c00 / (c00 + c10) * node0_f[1] + c01 / (c01 + c11) * node1_f[1];
         f[edge_vertices_idxs[1]][2] +=
-            c00 / (c00 + c10) * node1_f[2] + c01 / (c01 + c11) * node2_f[2];
+            c00 / (c00 + c10) * node0_f[2] + c01 / (c01 + c11) * node1_f[2];
     }
 
     //println!("{:?}", edge_lengths);
