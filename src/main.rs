@@ -111,11 +111,11 @@ fn joint_animation(
     edge_lengths: Res<Vec<f64>>,
     mut velocity: ResMut<Vec<[f64; 3]>>,
 ) {
-    let fold_ratio = 0.5;
+    let fold_ratio = 1.0;
     let crease_crease_stiffness = 0.7;
     let flat_crease_stiffness = 0.7;
     let axial_stiffness = 20.0;
-    let percent_damping = 0.45;
+    let percent_damping = 0.25;
     let ref_fold = &mut *fold_obj;
     let ref_creases = &mut *creases;
     // calculate all normals
@@ -158,6 +158,10 @@ fn joint_animation(
         let theta = crease.get_theta(positions, faces_vertices);
         let mut diff = theta - fold_ratio * crease.target_angle;
 
+        if diff.abs() < 0.01 {
+            diff = 0.0;
+        }
+
         if diff < -5.0 {
             diff += std::f64::consts::PI * 2.0;
         } else if diff > 5.0 {
@@ -175,21 +179,30 @@ fn joint_animation(
         let rxn_force_scale = k * diff * -1.0;
 
         let [normal0, normal1] = crease.get_normals(positions, faces_vertices);
-        if _ci == 48 {
-            println!(
-                "theta={}, target = {}, ci={}, force={}",
-                theta,
-                fold_ratio * crease.target_angle,
-                _ci,
-                rxn_force_scale
-            );
-        }
+
         let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
         let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
 
+        if _ci > 0 {
+            println!(
+                "theta={}, target = {}, diff={}, ci={}, force={}, h1={}, h2={}",
+                theta,
+                fold_ratio * crease.target_angle,
+                diff,
+                _ci,
+                rxn_force_scale,
+                h0,
+                h1
+            );
+        }
+
+        if h1 < 0.00001 || h0 < 0.00001 {
+            continue;
+        }
+
         let edge_vertices_idxs = crease.edge_vertices_idxs;
-        let node0_f = scale(&normal0, 2.0 / (h0 + _h00) * rxn_force_scale);
-        let node1_f = scale(&normal1, 2.0 / (h1 + _h11) * rxn_force_scale);
+        let node0_f = scale(&normal0, 1.0 / (h0) * rxn_force_scale);
+        let node1_f = scale(&normal1, 1.0 / (h1) * rxn_force_scale);
 
         f[vertices_idxs[0]][0] -= node0_f[0];
         f[vertices_idxs[0]][1] -= node0_f[1];
