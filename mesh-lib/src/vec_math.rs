@@ -37,6 +37,10 @@ pub fn vec_length(vector: &[f64; 3]) -> f64 {
     length_sqr.sqrt()
 }
 
+pub fn vec_length_square(vector: &[f64; 3]) -> f64 {
+    vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]
+}
+
 pub fn points_length(a: &[f64; 3], b: &[f64; 3]) -> f64 {
     let tmp_vec = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     vec_length(&tmp_vec)

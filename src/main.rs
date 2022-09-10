@@ -6,18 +6,26 @@ use smooth_bevy_cameras::controllers::orbit::{
 };
 use smooth_bevy_cameras::LookTransformPlugin;
 
-use mesh_lib::vec_math::{normalize, scale, sub, vec_length};
+use mesh_lib::vec_math::{
+    cross, dot, normalize, points_cross, scale, sub, vec_length, vec_length_square,
+};
 use mesh_lib::{Crease, Fold};
 use std::fs;
 
 use bevy::render::mesh::{Indices, Mesh};
 
+struct Record {
+    face_angles: Vec<[f64; 3]>,
+}
+
 fn main() {
     let axial_stiffness = 20.0;
-    let data = fs::read_to_string("./mesh-lib/src/bird2.fold").unwrap();
+    let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
     let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
     let edge_lengths = fold.get_edge_length();
+    // init face_angles
+    let face_angles = fold.get_face_angles();
     let positions = &fold.vertices_coords;
     let velocity = vec![[0.0f64, 0.0f64, 0.0f64]; positions.len()];
     let dt = fold.get_dt(axial_stiffness);
@@ -29,6 +37,7 @@ fn main() {
         .insert_resource(creases)
         .insert_resource(edge_lengths)
         .insert_resource(velocity)
+        .insert_resource(Record { face_angles })
         .add_plugins(DefaultPlugins)
         .add_plugin(LookTransformPlugin)
         .add_plugin(WorldInspectorPlugin::new())
@@ -108,16 +117,19 @@ fn joint_animation(
     mut meshes: ResMut<Assets<Mesh>>,
     mut fold_obj: ResMut<Fold>,
     mut creases: ResMut<Vec<Crease>>,
+    record: Res<Record>,
     edge_lengths: Res<Vec<f64>>,
     mut velocity: ResMut<Vec<[f64; 3]>>,
 ) {
     let fold_ratio = 1.0;
     let crease_crease_stiffness = 0.7;
     let flat_crease_stiffness = 0.7;
+    let face_stiffness = 0.2;
     let axial_stiffness = 20.0;
     let percent_damping = 0.25;
     let ref_fold = &mut *fold_obj;
     let ref_creases = &mut *creases;
+    let origin_face_angle = &record.face_angles;
     // calculate all normals
     let length = (ref_fold.faces_vertices).len();
     let faces_vertices = &mut ref_fold.faces_vertices;
@@ -126,6 +138,7 @@ fn joint_animation(
 
     let edges_vertices = &mut ref_fold.edges_vertices;
     for (i, idxs) in edges_vertices.iter().enumerate() {
+        // edge
         let mut x01 = sub(&positions[idxs[1]], &positions[idxs[0]]);
         let new_length = vec_length(&x01);
         let k = axial_stiffness / edge_lengths[i];
@@ -154,6 +167,7 @@ fn joint_animation(
     }
 
     for (_ci, crease) in ref_creases.iter().enumerate() {
+        // crease
         let vertices_idxs = crease.top_vertices_idxs;
         let theta = crease.get_theta(positions, faces_vertices);
         let mut diff = theta - fold_ratio * crease.target_angle;
@@ -176,29 +190,29 @@ fn joint_animation(
 
         let edge_length = edge_lengths[crease.edge_idx];
         let k = edge_length * crease_stiffness;
-        let rxn_force_scale = k * diff * -1.0;
+        let rxn_force_scale = -1.0 * k * diff;
 
         let [normal0, normal1] = crease.get_normals(positions, faces_vertices);
 
         let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
         let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
 
-        if _ci > 0 {
-            println!(
-                "theta={}, target = {}, diff={}, ci={}, force={}, h1={}, h2={}",
-                theta,
-                fold_ratio * crease.target_angle,
-                diff,
-                _ci,
-                rxn_force_scale,
-                h0,
-                h1
-            );
-        }
+        // if _ci > 0 {
+        //     println!(
+        //         "theta={}, target = {}, diff={}, ci={}, force={}, h1={}, h2={}",
+        //         theta,
+        //         fold_ratio * crease.target_angle,
+        //         diff,
+        //         _ci,
+        //         rxn_force_scale,
+        //         h0,
+        //         h1
+        //     );
+        // }
 
-        if h1 < 0.00001 || h0 < 0.00001 {
-            continue;
-        }
+        // if h1 < 0.00001 || h0 < 0.00001 {
+        //     continue;
+        // }
 
         let edge_vertices_idxs = crease.edge_vertices_idxs;
         let node0_f = scale(&normal0, 1.0 / (h0) * rxn_force_scale);
@@ -225,6 +239,69 @@ fn joint_animation(
             c00 / (c00 + c10) * node0_f[1] + c01 / (c01 + c11) * node1_f[1];
         f[edge_vertices_idxs[1]][2] +=
             c00 / (c00 + c10) * node0_f[2] + c01 / (c01 + c11) * node1_f[2];
+    }
+
+    for (fi, idxs) in faces_vertices.iter().enumerate() {
+        // let mut ret_vec: Vec<[f64; 3]> = Vec::new();
+        let a = positions[idxs[0]];
+        let b = positions[idxs[1]];
+        let c = positions[idxs[2]];
+        let ab = normalize(&sub(&b, &a));
+        let ac = normalize(&sub(&c, &a));
+        let bc = normalize(&sub(&c, &b));
+        let angles = [
+            dot(&ab, &ac).acos(),
+            (-1.0 * dot(&ab, &bc)).acos(),
+            dot(&ac, &bc).acos(),
+        ];
+
+        let normal = normalize(&points_cross(&a, &b, &c));
+
+        let diff = sub(&angles, &origin_face_angle[fi]);
+        let force = scale(&diff, -1.0 * face_stiffness);
+
+        let tmp_ba = scale(
+            &cross(&normal, &sub(&a, &b)),
+            vec_length_square(&sub(&a, &b)),
+        );
+        let tmp_ab = scale(&tmp_ba, -1.0);
+
+        let tmp_bc = scale(
+            &cross(&normal, &sub(&c, &b)),
+            vec_length_square(&sub(&c, &b)),
+        );
+        let tmp_cb = scale(&tmp_bc, -1.0);
+
+        let tmp_ca = scale(
+            &cross(&normal, &sub(&a, &c)),
+            vec_length_square(&sub(&a, &c)),
+        );
+        let tmp_ac = scale(&tmp_ca, -1.0);
+
+        f[idxs[0]][0] +=
+            force[1] * tmp_ba[0] + force[0] * (tmp_ab[0] - tmp_ac[0]) - force[2] * tmp_ca[0];
+        f[idxs[0]][1] +=
+            force[1] * tmp_ba[1] + force[0] * (tmp_ab[1] - tmp_ac[1]) - force[2] * tmp_ca[1];
+        f[idxs[0]][2] +=
+            force[1] * tmp_ba[2] + force[0] * (tmp_ab[2] - tmp_ac[2]) - force[2] * tmp_ca[2];
+
+        f[idxs[1]][0] +=
+            force[1] * (tmp_bc[0] - tmp_ba[0]) + force[0] * -1.0 * tmp_ab[0] + force[2] * tmp_cb[0];
+        f[idxs[1]][1] +=
+            force[1] * (tmp_bc[1] - tmp_ba[1]) + force[0] * -1.0 * tmp_ab[1] + force[2] * tmp_cb[1];
+        f[idxs[1]][2] +=
+            force[1] * (tmp_bc[2] - tmp_ba[2]) + force[0] * -1.0 * tmp_ab[2] + force[2] * tmp_cb[2];
+
+        f[idxs[2]][0] +=
+            force[1] * -1.0 * tmp_bc[0] + force[0] * tmp_ac[0] + force[2] * (tmp_ca[0] - tmp_cb[0]);
+        f[idxs[2]][1] +=
+            force[1] * -1.0 * tmp_bc[1] + force[0] * tmp_ac[1] + force[2] * (tmp_ca[1] - tmp_cb[1]);
+        f[idxs[2]][2] +=
+            force[1] * -1.0 * tmp_bc[2] + force[0] * tmp_ac[2] + force[2] * (tmp_ca[2] - tmp_cb[2]);
+
+        // nominalTriangles[4 * i] = Math.acos(ab.dot(ac));
+        // nominalTriangles[4 * i + 1] = Math.acos(-1 * ab.dot(bc));
+        // nominalTriangles[4 * i + 2] = Math.acos(ac.dot(bc));
     }
 
     //println!("{:?}", edge_lengths);

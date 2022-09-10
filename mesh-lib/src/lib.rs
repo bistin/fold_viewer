@@ -26,6 +26,7 @@ pub struct Fold {
     pub edges_assignment: Vec<String>,
     pub faces_vertices: Vec<[usize; 3]>,
     dt: Option<f64>,
+    face_angles: Option<Vec<[f64; 3]>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -166,6 +167,41 @@ impl Fold {
             ret_vec.push(points_length(&v0, &v1));
         }
         ret_vec
+    }
+
+    pub fn get_face_angles(&self) -> Vec<[f64; 3]> {
+        let faces_vertices = &self.faces_vertices;
+        let positions = &self.vertices_coords;
+
+        let mut ret_vec: Vec<[f64; 3]> = Vec::new();
+        for idxs in faces_vertices.iter() {
+            let a = positions[idxs[0]];
+            let b = positions[idxs[1]];
+            let c = positions[idxs[2]];
+            let ab = normalize(&sub(&b, &a));
+            let ac = normalize(&sub(&c, &a));
+            let bc = normalize(&sub(&c, &b));
+            ret_vec.push([
+                dot(&ab, &ac).acos(),
+                (-1.0 * dot(&ab, &bc)).acos(),
+                dot(&ac, &bc).acos(),
+            ]);
+
+            // nominalTriangles[4 * i] = Math.acos(ab.dot(ac));
+            // nominalTriangles[4 * i + 1] = Math.acos(-1 * ab.dot(bc));
+            // nominalTriangles[4 * i + 2] = Math.acos(ac.dot(bc));
+        }
+
+        ret_vec
+    }
+
+    pub fn set_original_face_angles(&mut self) {
+        let face_angles = self.get_face_angles();
+        self.face_angles = Some(face_angles);
+    }
+
+    pub fn get_original_face_angles(&mut self) -> Vec<[f64; 3]> {
+        self.face_angles.as_ref().unwrap().to_vec()
     }
 
     pub fn get_dt(&mut self, axial_stiffness: f64) -> f64 {
