@@ -138,19 +138,12 @@ impl Crease {
     ) -> f64 {
         let [normal0, normal1] = self.get_normals(vertices_coords, faces_vertices);
 
-        let mut dot_normals = dot(&normal0, &normal1);
-        dot_normals = if dot_normals < -1.0 {
-            -1.0
-        } else if dot_normals > 1.0 {
-            1.0
-        } else {
-            dot_normals
-        };
+        let dot_normals = dot(&normal0, &normal1).clamp(-1.0, 1.0);
 
         let crease_vector = normalize(&self.get_edge_vector(vertices_coords));
         dot(&cross(&normal0, &crease_vector), &normal1).atan2(dot_normals)
 
-        // dot_normals.atan2(dot(&cross(&normal0, &crease_vector), &normal1))
+        //dot_normals.atan2(dot(&cross(&normal0, &crease_vector), &normal1))
         //dot_normals.acos() - PI / 2
     }
 }
@@ -263,8 +256,8 @@ impl Fold {
             let assignment = &edges_assignment[i];
             let is_crease = assignment == "M" || assignment == "V" || assignment == "F";
             let angle = match assignment.as_str() {
-                "M" => -180.0f64,
-                "V" => 180.0f64,
+                "M" => -1.0 * std::f64::consts::PI,
+                "V" => std::f64::consts::PI,
                 "F" => 0.0f64,
                 _ => 0.0f64,
             };
@@ -294,7 +287,7 @@ impl Fold {
                         faces_vertices[val[0]][face0_top_idx],
                         faces_vertices[val[1]][face1_top_idx],
                     ],
-                    target_angle: (angle * std::f64::consts::PI / 180.0) as f64,
+                    target_angle: angle,
                 });
             }
         }

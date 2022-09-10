@@ -16,6 +16,7 @@ use bevy::render::mesh::{Indices, Mesh};
 
 struct Record {
     face_angles: Vec<[f64; 3]>,
+    dt: f64,
 }
 
 fn main() {
@@ -26,18 +27,16 @@ fn main() {
     let edge_lengths = fold.get_edge_length();
     // init face_angles
     let face_angles = fold.get_face_angles();
-    let positions = &fold.vertices_coords;
-    let velocity = vec![[0.0f64, 0.0f64, 0.0f64]; positions.len()];
+    // let positions = &fold.vertices_coords;
+    let velocity = vec![[0.0f64, 0.0f64, 0.0f64]; fold.vertices_coords.len()];
     let dt = fold.get_dt(axial_stiffness);
 
-    println!("{}", dt);
     App::new()
-        .insert_resource(dt)
         .insert_resource(fold)
         .insert_resource(creases)
         .insert_resource(edge_lengths)
         .insert_resource(velocity)
-        .insert_resource(Record { face_angles })
+        .insert_resource(Record { face_angles, dt })
         .add_plugins(DefaultPlugins)
         .add_plugin(LookTransformPlugin)
         .add_plugin(WorldInspectorPlugin::new())
@@ -113,7 +112,6 @@ fn setup(
 }
 
 fn joint_animation(
-    dt: Res<f64>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut fold_obj: ResMut<Fold>,
     mut creases: ResMut<Vec<Crease>>,
@@ -123,10 +121,10 @@ fn joint_animation(
 ) {
     let fold_ratio = 1.0;
     let crease_crease_stiffness = 0.7;
-    let flat_crease_stiffness = 0.7;
+    let flat_crease_stiffness = 0.9;
     let face_stiffness = 0.2;
     let axial_stiffness = 20.0;
-    let percent_damping = 0.25;
+    let percent_damping = 0.45;
     let ref_fold = &mut *fold_obj;
     let ref_creases = &mut *creases;
     let origin_face_angle = &record.face_angles;
@@ -172,7 +170,7 @@ fn joint_animation(
         let theta = crease.get_theta(positions, faces_vertices);
         let mut diff = theta - fold_ratio * crease.target_angle;
 
-        if diff.abs() < 0.01 {
+        if diff.abs() < 0.0001 {
             diff = 0.0;
         }
 
@@ -197,18 +195,18 @@ fn joint_animation(
         let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
         let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
 
-        // if _ci > 0 {
-        //     println!(
-        //         "theta={}, target = {}, diff={}, ci={}, force={}, h1={}, h2={}",
-        //         theta,
-        //         fold_ratio * crease.target_angle,
-        //         diff,
-        //         _ci,
-        //         rxn_force_scale,
-        //         h0,
-        //         h1
-        //     );
-        // }
+        if _ci > 0 {
+            println!(
+                "theta={}, target = {}, diff={}, ci={}, force={}, h1={}, h2={}",
+                theta,
+                fold_ratio * crease.target_angle,
+                diff,
+                _ci,
+                rxn_force_scale,
+                h0,
+                h1
+            );
+        }
 
         // if h1 < 0.00001 || h0 < 0.00001 {
         //     continue;
@@ -258,7 +256,7 @@ fn joint_animation(
         let normal = normalize(&points_cross(&a, &b, &c));
 
         let diff = sub(&angles, &origin_face_angle[fi]);
-        let force = scale(&diff, -1.0 * face_stiffness);
+        let mut force = scale(&diff, -1.0 * face_stiffness);
 
         let tmp_ba = scale(
             &cross(&normal, &sub(&a, &b)),
@@ -277,6 +275,10 @@ fn joint_animation(
             vec_length_square(&sub(&a, &c)),
         );
         let tmp_ac = scale(&tmp_ca, -1.0);
+
+        //force[1] = 0.0;
+        //force[0] = 0.0;
+        //force[2] = 0.0;
 
         f[idxs[0]][0] +=
             force[1] * tmp_ba[0] + force[0] * (tmp_ab[0] - tmp_ac[0]) - force[2] * tmp_ca[0];
@@ -308,7 +310,7 @@ fn joint_animation(
 
     // let edge = &fold_obj.edges_vertices;
     //let positions = &mut *fold_obj.vertices_coords;
-    let delta_t = *dt;
+    let delta_t = record.dt;
     let decay = 1.0;
     for (i, position) in &mut positions.iter_mut().enumerate() {
         //let a0 = f[i][0] / 1.0;
