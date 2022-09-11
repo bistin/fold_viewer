@@ -21,7 +21,7 @@ struct Record {
 
 fn main() {
     let axial_stiffness = 20.0;
-    let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
+    let data = fs::read_to_string("./mesh-lib/src/bird2.fold").unwrap();
     let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
     let edge_lengths = fold.get_edge_length();
@@ -119,9 +119,9 @@ fn joint_animation(
     edge_lengths: Res<Vec<f64>>,
     mut velocity: ResMut<Vec<[f64; 3]>>,
 ) {
-    let fold_ratio = 0.6;
-    let crease_crease_stiffness = 0.35;
-    let flat_crease_stiffness = 0.35;
+    let fold_ratio = 1.0;
+    let crease_crease_stiffness = 0.70;
+    let flat_crease_stiffness = 0.70;
     let face_stiffness = 0.2;
     let axial_stiffness = 20.0;
     let percent_damping = 0.45;
@@ -212,7 +212,11 @@ fn joint_animation(
         //     );
         // }
 
-        if (c10).abs() < 0.00001 || (c10).abs() < 0.00001 {
+        if (c00).abs() < 0.00001 || (c01).abs() < 0.00001 {
+            continue;
+        }
+
+        if (c10).abs() < 0.00001 || (c11).abs() < 0.00001 {
             continue;
         }
 
@@ -224,13 +228,13 @@ fn joint_animation(
         let node0_f = scale(&normal0, 1.0 / (h0) * rxn_force_scale);
         let node1_f = scale(&normal1, 1.0 / (h1) * rxn_force_scale);
 
-        f[vertices_idxs[0]][0] -= node0_f[0];
-        f[vertices_idxs[0]][1] -= node0_f[1];
-        f[vertices_idxs[0]][2] -= node0_f[2];
+        f[vertices_idxs[0]][0] -= 1.0 * node0_f[0];
+        f[vertices_idxs[0]][1] -= 1.0 * node0_f[1];
+        f[vertices_idxs[0]][2] -= 1.0 * node0_f[2];
 
-        f[vertices_idxs[1]][0] -= node1_f[0];
-        f[vertices_idxs[1]][1] -= node1_f[1];
-        f[vertices_idxs[1]][2] -= node1_f[2];
+        f[vertices_idxs[1]][0] -= 1.0 * node1_f[0];
+        f[vertices_idxs[1]][1] -= 1.0 * node1_f[1];
+        f[vertices_idxs[1]][2] -= 1.0 * node1_f[2];
 
         // f[edge_vertices_idxs[0]][0] +=
         //     c10 / (c00 + c10) * node0_f[0] + c11 / (c01 + c11) * node1_f[0];
@@ -253,6 +257,14 @@ fn joint_animation(
         f[edge_vertices_idxs[1]][0] += (c00) * node0_f[0] + c01 * node1_f[0];
         f[edge_vertices_idxs[1]][1] += (c00) * node0_f[1] + c01 * node1_f[1];
         f[edge_vertices_idxs[1]][2] += (c00) * node0_f[2] + c01 * node1_f[2];
+
+        // f[edge_vertices_idxs[0]][0] += (c10) * node0_f[0] + (c11) * node1_f[0];
+        // f[edge_vertices_idxs[0]][1] += (c10) * node0_f[1] + (c11) * node1_f[1];
+        // f[edge_vertices_idxs[0]][2] += (c10) * node0_f[2] + (c11) * node1_f[2];
+
+        // f[edge_vertices_idxs[1]][0] += (1.0 - c10) * node0_f[0] + (1.0 - c11) * node1_f[0];
+        // f[edge_vertices_idxs[1]][1] += (1.0 - c10) * node0_f[1] + (1.0 - c11) * node1_f[1];
+        // f[edge_vertices_idxs[1]][2] += (1.0 - c10) * node0_f[2] + (1.0 - c11) * node1_f[2];
     }
 
     for (fi, idxs) in faces_vertices.iter().enumerate() {
@@ -260,6 +272,14 @@ fn joint_animation(
         let a = positions[idxs[0]];
         let b = positions[idxs[1]];
         let c = positions[idxs[2]];
+        let len_ab = vec_length(&sub(&a, &b));
+        let len_bc = vec_length(&sub(&b, &c));
+        let len_ca = vec_length(&sub(&c, &a));
+
+        if len_ab < 0.000001 || len_bc < 0.000001 || len_ca < 0.000001 {
+            continue;
+        }
+
         let ab = normalize(&sub(&b, &a));
         let ac = normalize(&sub(&c, &a));
         let bc = normalize(&sub(&c, &b));
@@ -292,9 +312,9 @@ fn joint_animation(
         );
         let tmp_ac = scale(&tmp_ca, -1.0);
 
-        //force[1] = 0.0;
-        //force[0] = 0.0;
-        //force[2] = 0.0;
+        // force[1] = 0.0;
+        // force[0] = 0.0;
+        // force[2] = 0.0;
 
         f[idxs[0]][0] +=
             force[1] * tmp_ba[0] + force[0] * (tmp_ab[0] - tmp_ac[0]) - force[2] * tmp_ca[0];

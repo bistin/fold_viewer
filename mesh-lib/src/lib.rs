@@ -55,23 +55,8 @@ impl Crease {
         let v0 = normalize(&sub(&t0, &p0));
         let v1 = normalize(&sub(&t1, &p0));
 
-        let mut cos0 = dot(&v0, &crease).clamp(-1.0, 1.0);
-        let mut cos1 = dot(&v1, &crease).clamp(-1.0, 1.0);
-
-        // cos0 = if cos0.abs() < threshold && cos0 > 0.0 {
-        //     threshold
-        // } else if cos0.abs() < threshold && cos0 < 0.0 {
-        //     threshold * -1.0
-        // } else {
-        //     cos0
-        // };
-        // cos1 = if cos1.abs() < threshold && cos1 > 0.0 {
-        //     threshold
-        // } else if cos1.abs() < threshold && cos1 < 0.0 {
-        //     threshold * -1.0
-        // } else {
-        //     cos1
-        // };
+        let cos0 = dot(&v0, &crease).clamp(-1.0, 1.0);
+        let cos1 = dot(&v1, &crease).clamp(-1.0, 1.0);
 
         let sin0 = (1.0 - cos0 * cos0).sqrt();
         let sin1 = (1.0 - cos1 * cos1).sqrt();
@@ -96,21 +81,6 @@ impl Crease {
 
         let cos0 = dot(&v0, &crease).clamp(-1.0, 1.0);
         let cos1 = dot(&v1, &crease).clamp(-1.0, 1.0);
-
-        // cos0 = if cos0.abs() < threshold && cos0 > 0.0 {
-        //     threshold
-        // } else if cos0.abs() < threshold && cos0 < 0.0 {
-        //     threshold * -1.0
-        // } else {
-        //     cos0
-        // };
-        // cos1 = if cos1.abs() < threshold && cos1 > 0.0 {
-        //     threshold
-        // } else if cos1.abs() < threshold && cos1 < 0.0 {
-        //     threshold * -1.0
-        // } else {
-        //     cos1
-        // };
 
         let sin0 = (1.0 - cos0 * cos0).sqrt();
         let sin1 = (1.0 - cos1 * cos1).sqrt();
@@ -285,12 +255,29 @@ impl Fold {
             };
 
             if is_crease {
-                let face0_top_idx = faces_vertices[val[0]]
+                // determin who is 0, 1
+                let e0_idx = faces_vertices[val[0]]
+                    .iter()
+                    .position(|&x| x == idxs[0])
+                    .unwrap() as i32;
+
+                let e1_idx = faces_vertices[val[0]]
+                    .iter()
+                    .position(|&x| x == idxs[1])
+                    .unwrap() as i32;
+
+                let new_val = if e1_idx - e0_idx == 1 || e1_idx - e0_idx == -2 {
+                    [val[0], val[1]]
+                } else {
+                    [val[1], val[0]]
+                };
+
+                let face0_top_idx = faces_vertices[new_val[0]]
                     .iter()
                     .position(|&x| x != idxs[0] && x != idxs[1])
                     .unwrap();
 
-                let face1_top_idx = faces_vertices[val[1]]
+                let face1_top_idx = faces_vertices[new_val[1]]
                     .iter()
                     .position(|&x| x != idxs[0] && x != idxs[1])
                     .unwrap();
@@ -301,13 +288,13 @@ impl Fold {
                         &vertices_coords[idxs[0]],
                         &vertices_coords[idxs[1]],
                     ),
-                    face_idxs: [val[0], val[1]],
+                    face_idxs: [new_val[0], new_val[1]],
 
                     assignment: edges_assignment[i].clone(),
                     edge_idx: i,
                     top_vertices_idxs: [
-                        faces_vertices[val[0]][face0_top_idx],
-                        faces_vertices[val[1]][face1_top_idx],
+                        faces_vertices[new_val[0]][face0_top_idx],
+                        faces_vertices[new_val[1]][face1_top_idx],
                     ],
                     target_angle: angle,
                 });
