@@ -119,9 +119,9 @@ fn joint_animation(
     edge_lengths: Res<Vec<f64>>,
     mut velocity: ResMut<Vec<[f64; 3]>>,
 ) {
-    let fold_ratio = 1.0;
-    let crease_crease_stiffness = 0.7;
-    let flat_crease_stiffness = 0.9;
+    let fold_ratio = 0.6;
+    let crease_crease_stiffness = 0.35;
+    let flat_crease_stiffness = 0.35;
     let face_stiffness = 0.2;
     let axial_stiffness = 20.0;
     let percent_damping = 0.45;
@@ -170,8 +170,13 @@ fn joint_animation(
         let theta = crease.get_theta(positions, faces_vertices);
         let mut diff = theta - fold_ratio * crease.target_angle;
 
-        if diff.abs() < 0.0001 {
-            diff = 0.0;
+        // if diff.abs() < 0.00001 {
+        //     diff = 0.0;
+        //     continue;
+        // }
+
+        if vec_length(&crease.get_edge_vector(positions)) < 0.00001 {
+            continue;
         }
 
         if diff < -5.0 {
@@ -179,7 +184,6 @@ fn joint_animation(
         } else if diff > 5.0 {
             diff -= std::f64::consts::PI * 2.0;
         }
-        // theta = diff + fold_ratio * crease.target_angle;
         let crease_stiffness = if crease.assignment == "F" {
             flat_crease_stiffness
         } else {
@@ -195,22 +199,26 @@ fn joint_animation(
         let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
         let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
 
-        if _ci > 0 {
-            println!(
-                "theta={}, target = {}, diff={}, ci={}, force={}, h1={}, h2={}",
-                theta,
-                fold_ratio * crease.target_angle,
-                diff,
-                _ci,
-                rxn_force_scale,
-                h0,
-                h1
-            );
+        // if _ci > 0 {
+        //     println!(
+        //         "theta={}, target = {}, diff={}, ci={}, force={}, h1={}, h2={}",
+        //         theta,
+        //         fold_ratio * crease.target_angle,
+        //         diff,
+        //         _ci,
+        //         rxn_force_scale,
+        //         h0,
+        //         h1
+        //     );
+        // }
+
+        if (c10).abs() < 0.00001 || (c10).abs() < 0.00001 {
+            continue;
         }
 
-        // if h1 < 0.00001 || h0 < 0.00001 {
-        //     continue;
-        // }
+        if h0 < 0.00001 || h1 < 0.00001 {
+            continue;
+        }
 
         let edge_vertices_idxs = crease.edge_vertices_idxs;
         let node0_f = scale(&normal0, 1.0 / (h0) * rxn_force_scale);
@@ -224,19 +232,27 @@ fn joint_animation(
         f[vertices_idxs[1]][1] -= node1_f[1];
         f[vertices_idxs[1]][2] -= node1_f[2];
 
-        f[edge_vertices_idxs[0]][0] +=
-            c10 / (c00 + c10) * node0_f[0] + c11 / (c01 + c11) * node1_f[0];
-        f[edge_vertices_idxs[0]][1] +=
-            c10 / (c00 + c10) * node0_f[1] + c11 / (c01 + c11) * node1_f[1];
-        f[edge_vertices_idxs[0]][2] +=
-            c10 / (c00 + c10) * node0_f[2] + c11 / (c01 + c11) * node1_f[2];
+        // f[edge_vertices_idxs[0]][0] +=
+        //     c10 / (c00 + c10) * node0_f[0] + c11 / (c01 + c11) * node1_f[0];
+        // f[edge_vertices_idxs[0]][1] +=
+        //     c10 / (c00 + c10) * node0_f[1] + c11 / (c01 + c11) * node1_f[1];
+        // f[edge_vertices_idxs[0]][2] +=
+        //     c10 / (c00 + c10) * node0_f[2] + c11 / (c01 + c11) * node1_f[2];
 
-        f[edge_vertices_idxs[1]][0] +=
-            c00 / (c00 + c10) * node0_f[0] + c01 / (c01 + c11) * node1_f[0];
-        f[edge_vertices_idxs[1]][1] +=
-            c00 / (c00 + c10) * node0_f[1] + c01 / (c01 + c11) * node1_f[1];
-        f[edge_vertices_idxs[1]][2] +=
-            c00 / (c00 + c10) * node0_f[2] + c01 / (c01 + c11) * node1_f[2];
+        // f[edge_vertices_idxs[1]][0] +=
+        //     c00 / (c00 + c10) * node0_f[0] + c01 / (c01 + c11) * node1_f[0];
+        // f[edge_vertices_idxs[1]][1] +=
+        //     c00 / (c00 + c10) * node0_f[1] + c01 / (c01 + c11) * node1_f[1];
+        // f[edge_vertices_idxs[1]][2] +=
+        //     c00 / (c00 + c10) * node0_f[2] + c01 / (c01 + c11) * node1_f[2];
+
+        f[edge_vertices_idxs[0]][0] += (1.0 - c00) * node0_f[0] + (1.0 - c01) * node1_f[0];
+        f[edge_vertices_idxs[0]][1] += (1.0 - c00) * node0_f[1] + (1.0 - c01) * node1_f[1];
+        f[edge_vertices_idxs[0]][2] += (1.0 - c00) * node0_f[2] + (1.0 - c01) * node1_f[2];
+
+        f[edge_vertices_idxs[1]][0] += (c00) * node0_f[0] + c01 * node1_f[0];
+        f[edge_vertices_idxs[1]][1] += (c00) * node0_f[1] + c01 * node1_f[1];
+        f[edge_vertices_idxs[1]][2] += (c00) * node0_f[2] + c01 * node1_f[2];
     }
 
     for (fi, idxs) in faces_vertices.iter().enumerate() {
