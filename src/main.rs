@@ -21,7 +21,7 @@ struct Record {
 
 fn main() {
     let axial_stiffness = 20.0;
-    let data = fs::read_to_string("./mesh-lib/src/bird2.fold").unwrap();
+    let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
     let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
     let edge_lengths = fold.get_edge_length();
@@ -81,6 +81,10 @@ fn setup(
             .collect::<Vec<[f32; 3]>>(),
     );
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(
+        Mesh::ATTRIBUTE_COLOR,
+        vec![[0.0, 0.0, 1.0, 1.0]; positions.len()],
+    );
     // mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0, 1.0, 1.0, 1.0]);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     // add entities to the world
@@ -292,7 +296,7 @@ fn joint_animation(
         let normal = normalize(&points_cross(&a, &b, &c));
 
         let diff = sub(&angles, &origin_face_angle[fi]);
-        let mut force = scale(&diff, -1.0 * face_stiffness);
+        let force = scale(&diff, -1.0 * face_stiffness);
 
         let tmp_ba = scale(
             &cross(&normal, &sub(&a, &b)),
@@ -336,10 +340,6 @@ fn joint_animation(
             force[1] * -1.0 * tmp_bc[1] + force[0] * tmp_ac[1] + force[2] * (tmp_ca[1] - tmp_cb[1]);
         f[idxs[2]][2] +=
             force[1] * -1.0 * tmp_bc[2] + force[0] * tmp_ac[2] + force[2] * (tmp_ca[2] - tmp_cb[2]);
-
-        // nominalTriangles[4 * i] = Math.acos(ab.dot(ac));
-        // nominalTriangles[4 * i + 1] = Math.acos(-1 * ab.dot(bc));
-        // nominalTriangles[4 * i + 2] = Math.acos(ac.dot(bc));
     }
 
     //println!("{:?}", edge_lengths);
