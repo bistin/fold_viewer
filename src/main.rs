@@ -15,15 +15,15 @@ use std::fs;
 use bevy::render::mesh::{Indices, Mesh};
 
 struct Record {
-    face_angles: Vec<[f64; 3]>,
-    edge_lengths: Vec<f64>,
-    dt: f64,
-    fold_ratio: f64,
-    crease_crease_stiffness: f64,
-    flat_crease_stiffness: f64,
-    face_stiffness: f64,
-    axial_stiffness: f64,
-    percent_damping: f64,
+    face_angles: Vec<[f32; 3]>,
+    edge_lengths: Vec<f32>,
+    dt: f32,
+    fold_ratio: f32,
+    crease_crease_stiffness: f32,
+    flat_crease_stiffness: f32,
+    face_stiffness: f32,
+    axial_stiffness: f32,
+    percent_damping: f32,
 }
 
 fn main() {
@@ -32,7 +32,7 @@ fn main() {
     let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
     let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
-    let velocity = vec![[0.0f64, 0.0f64, 0.0f64]; fold.vertices_coords.len()];
+    let velocity = vec![[0.0f32, 0.0f32, 0.0f32]; fold.vertices_coords.len()];
 
     let record = Record {
         face_angles: fold.get_face_angles(),
@@ -62,7 +62,7 @@ fn main() {
         .run();
 }
 
-fn rxn_force(k: f64, value: f64, target: f64) -> f64 {
+fn rxn_force(k: f32, value: f32, target: f32) -> f32 {
     -1.0 * k * (value - target)
 }
 /// set up a simple 3D scene
@@ -133,7 +133,7 @@ fn joint_animation(
     mut fold_obj: ResMut<Fold>,
     mut creases: ResMut<Vec<Crease>>,
     record: Res<Record>,
-    mut velocity: ResMut<Vec<[f64; 3]>>,
+    mut velocity: ResMut<Vec<[f32; 3]>>,
 ) {
     let ref_fold = &mut *fold_obj;
     let ref_creases = &mut *creases;
@@ -143,7 +143,7 @@ fn joint_animation(
     let length = (ref_fold.faces_vertices).len();
     let faces_vertices = &mut ref_fold.faces_vertices;
     let positions = &mut ref_fold.vertices_coords;
-    let mut f = vec![vec![0.0f64; 3]; length];
+    let mut f = vec![vec![0.0f32; 3]; length];
 
     let edges_vertices = &mut ref_fold.edges_vertices;
     for (i, idxs) in edges_vertices.iter().enumerate() {
@@ -152,7 +152,7 @@ fn joint_animation(
         let new_length = vec_length(&x01);
         let k = record.axial_stiffness / edge_lengths[i];
         let force = rxn_force(k, new_length, edge_lengths[i]);
-        if f64::is_nan(force) || f64::is_infinite(force) {
+        if f32::is_nan(force) || f32::is_infinite(force) {
             panic!("err");
         }
         x01 = normalize(&x01);
@@ -186,9 +186,9 @@ fn joint_animation(
         }
 
         if diff < -5.0 {
-            diff += std::f64::consts::PI * 2.0;
+            diff += std::f32::consts::PI * 2.0;
         } else if diff > 5.0 {
-            diff -= std::f64::consts::PI * 2.0;
+            diff -= std::f32::consts::PI * 2.0;
         }
         let crease_stiffness = if crease.assignment == "F" {
             record.flat_crease_stiffness

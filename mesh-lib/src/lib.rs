@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use bevy::math::Vec3;
 pub mod vec_math;
 
 use crate::vec_math::{cross, dot, normalize, points_cross, points_length, scale, sub, vec_length};
@@ -15,17 +16,17 @@ fn map_key(a: usize, b: usize) -> String {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Fold {
-    pub file_spec: f64,
+    pub file_spec: f32,
     pub file_creator: String,
     pub file_author: String,
     pub file_classes: Vec<String>,
     pub frame_attributes: Vec<String>,
     pub frame_unit: String,
-    pub vertices_coords: Vec<[f64; 3]>,
+    pub vertices_coords: Vec<[f32; 3]>,
     pub edges_vertices: Vec<[usize; 2]>,
     pub edges_assignment: Vec<String>,
     pub faces_vertices: Vec<[usize; 3]>,
-    dt: Option<f64>,
+    dt: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -33,8 +34,8 @@ pub struct Crease {
     // edge origin point and length
     pub edge_idx: usize,
     pub edge_vertices_idxs: [usize; 2],
-    pub origin_lentgh: f64,
-    pub target_angle: f64,
+    pub origin_lentgh: f32,
+    pub target_angle: f32,
     pub assignment: String,
     // face index
     pub face_idxs: [usize; 2],
@@ -44,7 +45,7 @@ pub struct Crease {
 }
 
 impl Crease {
-    pub fn get_0_coef(&self, vertices_coords: &Vec<[f64; 3]>) -> [f64; 4] {
+    pub fn get_0_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
         let p0 = vertices_coords[self.edge_vertices_idxs[0]];
         let t0 = vertices_coords[self.top_vertices_idxs[0]];
         let t1 = vertices_coords[self.top_vertices_idxs[1]];
@@ -68,7 +69,7 @@ impl Crease {
         ]
     }
 
-    pub fn get_1_coef(&self, vertices_coords: &Vec<[f64; 3]>) -> [f64; 4] {
+    pub fn get_1_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
         let p0 = vertices_coords[self.edge_vertices_idxs[1]];
         let t0 = vertices_coords[self.top_vertices_idxs[0]];
         let t1 = vertices_coords[self.top_vertices_idxs[1]];
@@ -92,7 +93,7 @@ impl Crease {
         ]
     }
 
-    pub fn get_edge_vector(&self, vertices_coords: &Vec<[f64; 3]>) -> [f64; 3] {
+    pub fn get_edge_vector(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 3] {
         // v01 = v1 - v0
         let edge_vertices_idxs = &self.edge_vertices_idxs;
         let a = vertices_coords[edge_vertices_idxs[1]];
@@ -102,9 +103,9 @@ impl Crease {
 
     pub fn get_normals(
         &self,
-        vertices_coords: &Vec<[f64; 3]>,
+        vertices_coords: &Vec<[f32; 3]>,
         faces_vertices: &Vec<[usize; 3]>,
-    ) -> [[f64; 3]; 2] {
+    ) -> [[f32; 3]; 2] {
         let val = &self.face_idxs;
 
         let normal0 = normalize(&points_cross(
@@ -123,15 +124,20 @@ impl Crease {
 
     pub fn get_theta(
         &self,
-        vertices_coords: &Vec<[f64; 3]>,
+        vertices_coords: &Vec<[f32; 3]>,
         faces_vertices: &Vec<[usize; 3]>,
-    ) -> f64 {
+    ) -> f32 {
         let [normal0, normal1] = self.get_normals(vertices_coords, faces_vertices);
+
+        let n0: Vec3 = Vec3::from(normal0);
+        let n1 = Vec3::from(normal1);
 
         let dot_normals = dot(&normal0, &normal1).clamp(-1.0, 1.0);
 
         let crease_vector = normalize(&self.get_edge_vector(vertices_coords));
-        dot(&cross(&normal0, &crease_vector), &normal1).atan2(dot_normals)
+        let res = dot(&cross(&normal0, &crease_vector), &normal1).atan2(dot_normals);
+
+        res
 
         //dot_normals.atan2(dot(&cross(&normal0, &crease_vector), &normal1))
         //dot_normals.acos() - PI / 2
@@ -140,10 +146,10 @@ impl Crease {
 
 impl Fold {
     // face1Ind, vertInd, face2Ind, ver2Ind, edgeInd, angle
-    pub fn get_edge_length(&self) -> Vec<f64> {
+    pub fn get_edge_length(&self) -> Vec<f32> {
         let edges_vertices = &self.edges_vertices;
         let vertices_coords = &self.vertices_coords;
-        let mut ret_vec: Vec<f64> = Vec::new();
+        let mut ret_vec: Vec<f32> = Vec::new();
         for idxs in edges_vertices.iter() {
             let v0 = vertices_coords[idxs[0]];
             let v1 = vertices_coords[idxs[1]];
@@ -152,11 +158,11 @@ impl Fold {
         ret_vec
     }
 
-    pub fn get_face_angles(&self) -> Vec<[f64; 3]> {
+    pub fn get_face_angles(&self) -> Vec<[f32; 3]> {
         let faces_vertices = &self.faces_vertices;
         let positions = &self.vertices_coords;
 
-        let mut ret_vec: Vec<[f64; 3]> = Vec::new();
+        let mut ret_vec: Vec<[f32; 3]> = Vec::new();
         for idxs in faces_vertices.iter() {
             let a = positions[idxs[0]];
             let b = positions[idxs[1]];
@@ -173,7 +179,7 @@ impl Fold {
         ret_vec
     }
 
-    pub fn get_dt(&mut self, axial_stiffness: f64) -> f64 {
+    pub fn get_dt(&mut self, axial_stiffness: f32) -> f32 {
         match self.dt {
             Some(x) => x,
             None => {
@@ -195,7 +201,7 @@ impl Fold {
                     }
                 }
 
-                let dt = 1.0 / (2.0 * std::f64::consts::PI * max_freq) * 0.9;
+                let dt = 1.0 / (2.0 * std::f32::consts::PI * max_freq) * 0.9;
                 self.dt = Some(dt);
                 dt
             }
@@ -232,10 +238,10 @@ impl Fold {
             let assignment = &edges_assignment[i];
             let is_crease = assignment == "M" || assignment == "V" || assignment == "F";
             let angle = match assignment.as_str() {
-                "M" => -1.0 * std::f64::consts::PI,
-                "V" => std::f64::consts::PI,
-                "F" => 0.0f64,
-                _ => 0.0f64,
+                "M" => -1.0 * std::f32::consts::PI,
+                "V" => std::f32::consts::PI,
+                "F" => 0.0f32,
+                _ => 0.0f32,
             };
 
             if is_crease {
