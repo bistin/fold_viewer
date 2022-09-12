@@ -17,10 +17,17 @@ use bevy::render::mesh::{Indices, Mesh};
 struct Record {
     face_angles: Vec<[f64; 3]>,
     dt: f64,
+    fold_ratio: f64,
+    crease_crease_stiffness: f64,
+    flat_crease_stiffness: f64,
+    face_stiffness: f64,
+    axial_stiffness: f64,
+    percent_damping: f64,
 }
 
 fn main() {
     let axial_stiffness = 20.0;
+
     let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
     let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
@@ -31,12 +38,23 @@ fn main() {
     let velocity = vec![[0.0f64, 0.0f64, 0.0f64]; fold.vertices_coords.len()];
     let dt = fold.get_dt(axial_stiffness);
 
+    let record = Record {
+        face_angles,
+        axial_stiffness,
+        fold_ratio: 1.0,
+        crease_crease_stiffness: 0.70,
+        flat_crease_stiffness: 0.70,
+        face_stiffness: 0.2,
+        percent_damping: 0.45,
+        dt,
+    };
+
     App::new()
         .insert_resource(fold)
         .insert_resource(creases)
         .insert_resource(edge_lengths)
         .insert_resource(velocity)
-        .insert_resource(Record { face_angles, dt })
+        .insert_resource(record)
         .add_plugins(DefaultPlugins)
         .add_plugin(LookTransformPlugin)
         .add_plugin(WorldInspectorPlugin::new())
@@ -44,6 +62,7 @@ fn main() {
         // .add_stage_after(stage::UPDATE, "fixed_update", SystemStage::parallel()
         // .with_run_criteria(FixedTimestep::step(0.4))
         .add_system(joint_animation)
+        .add_system(bevy::window::close_on_esc)
         .add_plugin(OrbitCameraPlugin::default())
         //.add_plugin(ScheduleRunnerPlugin(Duration::from_secs_f64(1.0 / 60.0)))
         .run();
@@ -62,7 +81,7 @@ fn setup(
     let positions = &fold_obj.vertices_coords;
     let mut indices = Vec::with_capacity(fold_obj.faces_vertices.len() * 3);
     let normals = vec![[1.0, 1.0, 0.0]; positions.len()];
-    let uvs = vec![[0.0, 0.0]; positions.len()];
+    let uvs = vec![[1.0, 1.0]; positions.len()];
 
     for face in &fold_obj.faces_vertices {
         for j in 0..3 {
@@ -83,7 +102,7 @@ fn setup(
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_COLOR,
-        vec![[0.0, 0.0, 1.0, 1.0]; positions.len()],
+        vec![[1.0, 0.0, 1.0, 1.0]; positions.len()],
     );
     // mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0, 1.0, 1.0, 1.0]);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
@@ -123,12 +142,6 @@ fn joint_animation(
     edge_lengths: Res<Vec<f64>>,
     mut velocity: ResMut<Vec<[f64; 3]>>,
 ) {
-    let fold_ratio = 1.0;
-    let crease_crease_stiffness = 0.70;
-    let flat_crease_stiffness = 0.70;
-    let face_stiffness = 0.2;
-    let axial_stiffness = 20.0;
-    let percent_damping = 0.45;
     let ref_fold = &mut *fold_obj;
     let ref_creases = &mut *creases;
     let origin_face_angle = &record.face_angles;
@@ -143,7 +156,7 @@ fn joint_animation(
         // edge
         let mut x01 = sub(&positions[idxs[1]], &positions[idxs[0]]);
         let new_length = vec_length(&x01);
-        let k = axial_stiffness / edge_lengths[i];
+        let k = record.axial_stiffness / edge_lengths[i];
         let force = rxn_force(k, new_length, edge_lengths[i]);
         if f64::is_nan(force) || f64::is_infinite(force) {
             panic!("err");
@@ -157,7 +170,7 @@ fn joint_animation(
         f[idxs[1]][1] += x01[1] * force;
         f[idxs[1]][2] += x01[2] * force;
 
-        let d = percent_damping * 2.0 * (k * 1.0).sqrt();
+        let d = record.percent_damping * 2.0 * (k * 1.0).sqrt();
         let v01 = sub(&velocity[idxs[1]], &velocity[idxs[0]]);
         f[idxs[0]][0] += v01[0] * d;
         f[idxs[0]][1] += v01[1] * d;
@@ -172,7 +185,7 @@ fn joint_animation(
         // crease
         let vertices_idxs = crease.top_vertices_idxs;
         let theta = crease.get_theta(positions, faces_vertices);
-        let mut diff = theta - fold_ratio * crease.target_angle;
+        let mut diff = theta - record.fold_ratio * crease.target_angle;
 
         // if diff.abs() < 0.00001 {
         //     diff = 0.0;
@@ -189,9 +202,9 @@ fn joint_animation(
             diff -= std::f64::consts::PI * 2.0;
         }
         let crease_stiffness = if crease.assignment == "F" {
-            flat_crease_stiffness
+            record.flat_crease_stiffness
         } else {
-            crease_crease_stiffness
+            record.crease_crease_stiffness
         };
 
         let edge_length = edge_lengths[crease.edge_idx];
@@ -296,7 +309,7 @@ fn joint_animation(
         let normal = normalize(&points_cross(&a, &b, &c));
 
         let diff = sub(&angles, &origin_face_angle[fi]);
-        let force = scale(&diff, -1.0 * face_stiffness);
+        let force = scale(&diff, -1.0 * record.face_stiffness);
 
         let tmp_ba = scale(
             &cross(&normal, &sub(&a, &b)),
