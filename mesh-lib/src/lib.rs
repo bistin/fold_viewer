@@ -26,7 +26,6 @@ pub struct Fold {
     pub edges_assignment: Vec<String>,
     pub faces_vertices: Vec<[usize; 3]>,
     dt: Option<f64>,
-    face_angles: Option<Vec<[f64; 3]>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -90,7 +89,6 @@ impl Crease {
             cos1,
             vec_length(&sub(&t0, &p0)) * sin0 * 1.0,
             vec_length(&sub(&t1, &p0)) * sin1 * 1.0,
-            //1.0, 1.0,
         ]
     }
 
@@ -171,22 +169,8 @@ impl Fold {
                 (-1.0 * dot(&ab, &bc)).acos(),
                 dot(&ac, &bc).acos(),
             ]);
-
-            // nominalTriangles[4 * i] = Math.acos(ab.dot(ac));
-            // nominalTriangles[4 * i + 1] = Math.acos(-1 * ab.dot(bc));
-            // nominalTriangles[4 * i + 2] = Math.acos(ac.dot(bc));
         }
-
         ret_vec
-    }
-
-    pub fn set_original_face_angles(&mut self) {
-        let face_angles = self.get_face_angles();
-        self.face_angles = Some(face_angles);
-    }
-
-    pub fn get_original_face_angles(&mut self) -> Vec<[f64; 3]> {
-        self.face_angles.as_ref().unwrap().to_vec()
     }
 
     pub fn get_dt(&mut self, axial_stiffness: f64) -> f64 {

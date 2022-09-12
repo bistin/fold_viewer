@@ -16,6 +16,7 @@ use bevy::render::mesh::{Indices, Mesh};
 
 struct Record {
     face_angles: Vec<[f64; 3]>,
+    edge_lengths: Vec<f64>,
     dt: f64,
     fold_ratio: f64,
     crease_crease_stiffness: f64,
@@ -31,36 +32,29 @@ fn main() {
     let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
     let mut fold: Fold = serde_json::from_str(&data).unwrap();
     let creases = fold.get_creases();
-    let edge_lengths = fold.get_edge_length();
-    // init face_angles
-    let face_angles = fold.get_face_angles();
-    // let positions = &fold.vertices_coords;
     let velocity = vec![[0.0f64, 0.0f64, 0.0f64]; fold.vertices_coords.len()];
-    let dt = fold.get_dt(axial_stiffness);
 
     let record = Record {
-        face_angles,
+        face_angles: fold.get_face_angles(),
         axial_stiffness,
+        edge_lengths: fold.get_edge_length(),
         fold_ratio: 1.0,
         crease_crease_stiffness: 0.70,
         flat_crease_stiffness: 0.70,
         face_stiffness: 0.2,
         percent_damping: 0.45,
-        dt,
+        dt: fold.get_dt(axial_stiffness),
     };
 
     App::new()
         .insert_resource(fold)
         .insert_resource(creases)
-        .insert_resource(edge_lengths)
         .insert_resource(velocity)
         .insert_resource(record)
         .add_plugins(DefaultPlugins)
         .add_plugin(LookTransformPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system(setup)
-        // .add_stage_after(stage::UPDATE, "fixed_update", SystemStage::parallel()
-        // .with_run_criteria(FixedTimestep::step(0.4))
         .add_system(joint_animation)
         .add_system(bevy::window::close_on_esc)
         .add_plugin(OrbitCameraPlugin::default())
@@ -139,12 +133,12 @@ fn joint_animation(
     mut fold_obj: ResMut<Fold>,
     mut creases: ResMut<Vec<Crease>>,
     record: Res<Record>,
-    edge_lengths: Res<Vec<f64>>,
     mut velocity: ResMut<Vec<[f64; 3]>>,
 ) {
     let ref_fold = &mut *fold_obj;
     let ref_creases = &mut *creases;
     let origin_face_angle = &record.face_angles;
+    let edge_lengths = &record.edge_lengths;
     // calculate all normals
     let length = (ref_fold.faces_vertices).len();
     let faces_vertices = &mut ref_fold.faces_vertices;
@@ -187,11 +181,6 @@ fn joint_animation(
         let theta = crease.get_theta(positions, faces_vertices);
         let mut diff = theta - record.fold_ratio * crease.target_angle;
 
-        // if diff.abs() < 0.00001 {
-        //     diff = 0.0;
-        //     continue;
-        // }
-
         if vec_length(&crease.get_edge_vector(positions)) < 0.00001 {
             continue;
         }
@@ -215,19 +204,6 @@ fn joint_animation(
 
         let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
         let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
-
-        // if _ci > 0 {
-        //     println!(
-        //         "theta={}, target = {}, diff={}, ci={}, force={}, h1={}, h2={}",
-        //         theta,
-        //         fold_ratio * crease.target_angle,
-        //         diff,
-        //         _ci,
-        //         rxn_force_scale,
-        //         h0,
-        //         h1
-        //     );
-        // }
 
         if (c00).abs() < 0.00001 || (c01).abs() < 0.00001 {
             continue;
@@ -374,8 +350,6 @@ fn joint_animation(
     }
 
     for (_handle_id, mesh) in meshes.iter_mut() {
-        //println!("{:?}", handle_id)
-        //mesh.attribute(id)
         mesh.insert_attribute(
             Mesh::ATTRIBUTE_POSITION,
             positions
@@ -384,5 +358,4 @@ fn joint_animation(
                 .collect::<Vec<[f32; 3]>>(),
         );
     }
-    //println!("{:?}", fold_obj)
 }
