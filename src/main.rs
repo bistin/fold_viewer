@@ -38,7 +38,7 @@ pub struct StatusText;
 fn main() {
   let axial_stiffness = 20.0;
 
-  let data = fs::read_to_string("./mesh-lib/src/bird2.fold").unwrap();
+  let data = fs::read_to_string("./mesh-lib/src/crand.fold").unwrap();
   let mut fold: Fold = serde_json::from_str(&data).unwrap();
   let creases = fold.get_creases();
   let velocity = vec![Vec3::new(0.0, 0.0, 0.0); fold.vertices_coords.len()];
@@ -303,6 +303,8 @@ fn joint_animation(
     f2[vertices_idxs[0]] -= node0_f;
     f2[vertices_idxs[1]] -= node1_f;
 
+    f2[edge_vertices_idxs[0]] += (1.0 - c00) * node0_f + (1.0 - c01) * node1_f;
+    f2[edge_vertices_idxs[1]] += (c00) * node0_f + (c01) * node1_f;
     // f[edge_vertices_idxs[0]][0] +=
     //     c10 / (c00 + c10) * node0_f[0] + c11 / (c01 + c11) * node1_f[0];
     // f[edge_vertices_idxs[0]][1] +=
@@ -316,9 +318,6 @@ fn joint_animation(
     //     c00 / (c00 + c10) * node0_f[1] + c01 / (c01 + c11) * node1_f[1];
     // f[edge_vertices_idxs[1]][2] +=
     //     c00 / (c00 + c10) * node0_f[2] + c01 / (c01 + c11) * node1_f[2];
-
-    f2[edge_vertices_idxs[0]] += (1.0 - c00) * node0_f + (1.0 - c01) * node1_f;
-    f2[edge_vertices_idxs[1]] += (c00) * node0_f + (c01) * node1_f;
 
     if _ci == 34 {
       println!(
@@ -381,7 +380,7 @@ fn joint_animation(
   }
 
   //let positions = &mut *fold_obj.vertices_coords;
-  let delta_t = record.dt / 3.0;
+  let delta_t = record.dt;
   for (i, position) in &mut positions.iter_mut().enumerate() {
     //let a0 = f[i][0] / 1.0;
 
