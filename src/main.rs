@@ -31,7 +31,10 @@ struct Record {
 }
 
 #[derive(Component)]
-struct FpsText;
+struct RatioText;
+
+#[derive(Component)]
+struct StatusText;
 
 fn main() {
   let axial_stiffness = 20.0;
@@ -65,6 +68,7 @@ fn main() {
     .add_startup_system(setup)
     .add_system(joint_animation)
     .add_system(print_keyboard_event_system)
+    .add_system(text_update_system)
     .add_system(bevy::window::close_on_esc)
     .add_plugin(OrbitCameraPlugin::default())
     //.add_plugin(ScheduleRunnerPlugin(Duration::from_secs_f64(1.0 / 60.0)))
@@ -119,33 +123,67 @@ fn setup(
     ..default()
   });
 
-  //ith multiple sections
   commands
     .spawn_bundle(
-      // Create a TextBundle that has a Text with a single section.
-      TextBundle::from_section(
-        // Accepts a `String` or any type that converts into a `String`, such as `&str`
-        "hello\nbevy!",
-        TextStyle {
-          font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-          font_size: 100.0,
-          color: Color::WHITE,
-        },
-      ) // Set the alignment of the Text
-      .with_text_alignment(TextAlignment::TOP_CENTER)
-      // Set the style of the TextBundle itself.
+      // Create a TextBundle that has a Text with a list of sections.
+      TextBundle::from_sections([
+        TextSection::new(
+          "fold ratio: ",
+          TextStyle {
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 30.0,
+            color: Color::WHITE,
+          },
+        ),
+        TextSection::from_style(TextStyle {
+          font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+          font_size: 30.0,
+          color: Color::GOLD,
+        }),
+      ])
       .with_style(Style {
         align_self: AlignSelf::FlexEnd,
         position_type: PositionType::Absolute,
         position: UiRect {
           bottom: Val::Px(5.0),
-          right: Val::Px(15.0),
+          left: Val::Px(15.0),
           ..default()
         },
         ..default()
       }),
     )
-    .insert(FpsText);
+    .insert(RatioText);
+
+  commands
+    .spawn_bundle(
+      // Create a TextBundle that has a Text with a list of sections.
+      TextBundle::from_sections([
+        TextSection::new(
+          "status:",
+          TextStyle {
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 30.0,
+            color: Color::WHITE,
+          },
+        ),
+        TextSection::from_style(TextStyle {
+          font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+          font_size: 30.0,
+          color: Color::GOLD,
+        }),
+      ])
+      .with_style(Style {
+        align_self: AlignSelf::FlexEnd,
+        position_type: PositionType::Absolute,
+        position: UiRect {
+          bottom: Val::Px(30.0),
+          left: Val::Px(15.0),
+          ..default()
+        },
+        ..default()
+      }),
+    )
+    .insert(StatusText);
 
   // light
   commands.spawn_bundle(PointLightBundle {
@@ -184,9 +222,35 @@ fn print_keyboard_event_system(
               record.state = 0;
             }
           }
+
+          if code == KeyCode::Q {
+            record.fold_ratio -= 0.1;
+          }
+
+          if code == KeyCode::W {
+            record.fold_ratio += 0.1;
+          }
         }
       }
       ButtonState::Released => {}
+    }
+  }
+}
+
+fn text_update_system(
+  record: Res<Record>,
+  mut query: Query<&mut Text, (With<RatioText>, Without<StatusText>)>,
+  mut query2: Query<&mut Text, With<StatusText>>,
+) {
+  for mut text in &mut query {
+    text.sections[1].value = format!("{:.2}", record.fold_ratio);
+  }
+
+  for mut text in &mut query2 {
+    text.sections[1].value = if record.state == 0 {
+      "stop".to_string()
+    } else {
+      "simulation".to_string()
     }
   }
 }
