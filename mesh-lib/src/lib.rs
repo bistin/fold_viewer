@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use bevy::math::Vec3;
 pub mod vec_math;
 
 use crate::vec_math::{cross, dot, normalize, points_cross, points_length, scale, sub, vec_length};
@@ -129,18 +128,10 @@ impl Crease {
     ) -> f32 {
         let [normal0, normal1] = self.get_normals(vertices_coords, faces_vertices);
 
-        let n0: Vec3 = Vec3::from(normal0);
-        let n1 = Vec3::from(normal1);
-
         let dot_normals = dot(&normal0, &normal1).clamp(-1.0, 1.0);
-
         let crease_vector = normalize(&self.get_edge_vector(vertices_coords));
         let res = dot(&cross(&normal0, &crease_vector), &normal1).atan2(dot_normals);
-
         res
-
-        //dot_normals.atan2(dot(&cross(&normal0, &crease_vector), &normal1))
-        //dot_normals.acos() - PI / 2
     }
 }
 
