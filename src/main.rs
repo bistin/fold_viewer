@@ -1,3 +1,6 @@
+use bevy::input::keyboard::KeyCode;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input::ButtonState;
 use bevy::prelude::*;
 use bevy::render::mesh::PrimitiveTopology;
 use bevy_inspector_egui::WorldInspectorPlugin;
@@ -24,26 +27,31 @@ struct Record {
   face_stiffness: f32,
   axial_stiffness: f32,
   percent_damping: f32,
+  state: i32,
 }
+
+#[derive(Component)]
+struct FpsText;
 
 fn main() {
   let axial_stiffness = 20.0;
 
-  let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
+  let data = fs::read_to_string("./mesh-lib/src/bird2.fold").unwrap();
   let mut fold: Fold = serde_json::from_str(&data).unwrap();
   let creases = fold.get_creases();
   let velocity = vec![[0.0f32, 0.0f32, 0.0f32]; fold.vertices_coords.len()];
 
   let record = Record {
     fold_ratio: 0.3,
-    face_angles: fold.get_face_angles(),
     axial_stiffness,
-    edge_lengths: fold.get_edge_length(),
     crease_crease_stiffness: 0.70,
     flat_crease_stiffness: 0.70,
     face_stiffness: 0.2,
-    percent_damping: 0.45,
+    percent_damping: 0.48,
     dt: fold.get_dt(axial_stiffness),
+    face_angles: fold.get_face_angles(),
+    edge_lengths: fold.get_edge_length(),
+    state: 1,
   };
 
   App::new()
@@ -56,6 +64,7 @@ fn main() {
     .add_plugin(WorldInspectorPlugin::new())
     .add_startup_system(setup)
     .add_system(joint_animation)
+    .add_system(print_keyboard_event_system)
     .add_system(bevy::window::close_on_esc)
     .add_plugin(OrbitCameraPlugin::default())
     //.add_plugin(ScheduleRunnerPlugin(Duration::from_secs_f64(1.0 / 60.0)))
@@ -70,6 +79,7 @@ fn setup(
   mut commands: Commands,
   mut meshes: ResMut<Assets<Mesh>>,
   mut materials: ResMut<Assets<StandardMaterial>>,
+  asset_server: Res<AssetServer>,
   fold_obj: Res<Fold>,
 ) {
   let positions = &fold_obj.vertices_coords;
@@ -108,6 +118,35 @@ fn setup(
     material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
     ..default()
   });
+
+  //ith multiple sections
+  commands
+    .spawn_bundle(
+      // Create a TextBundle that has a Text with a single section.
+      TextBundle::from_section(
+        // Accepts a `String` or any type that converts into a `String`, such as `&str`
+        "hello\nbevy!",
+        TextStyle {
+          font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+          font_size: 100.0,
+          color: Color::WHITE,
+        },
+      ) // Set the alignment of the Text
+      .with_text_alignment(TextAlignment::TOP_CENTER)
+      // Set the style of the TextBundle itself.
+      .with_style(Style {
+        align_self: AlignSelf::FlexEnd,
+        position_type: PositionType::Absolute,
+        position: UiRect {
+          bottom: Val::Px(5.0),
+          right: Val::Px(15.0),
+          ..default()
+        },
+        ..default()
+      }),
+    )
+    .insert(FpsText);
+
   // light
   commands.spawn_bundle(PointLightBundle {
     point_light: PointLight {
@@ -123,9 +162,33 @@ fn setup(
     .spawn_bundle(Camera3dBundle::default())
     .insert_bundle(OrbitCameraBundle::new(
       OrbitCameraController::default(),
-      Vec3::new(-2.0, 5.0, 5.0),
+      Vec3::new(0.0, 5.0, 0.0),
       Vec3::new(0., 0., 0.),
     ));
+}
+
+/// This system prints out all keyboard events as they come in
+fn print_keyboard_event_system(
+  mut keyboard_input_events: EventReader<KeyboardInput>,
+  mut record: ResMut<Record>,
+) {
+  for ev in keyboard_input_events.iter() {
+    match ev.state {
+      ButtonState::Pressed => {
+        println!("Key press: {:?} ({})", ev.key_code, ev.scan_code);
+        if let Some(code) = ev.key_code {
+          if code == KeyCode::Space {
+            if record.state == 0 {
+              record.state = 1;
+            } else {
+              record.state = 0;
+            }
+          }
+        }
+      }
+      ButtonState::Released => {}
+    }
+  }
 }
 
 fn joint_animation(
@@ -135,6 +198,10 @@ fn joint_animation(
   record: Res<Record>,
   mut velocity: ResMut<Vec<[f32; 3]>>,
 ) {
+  if record.state == 0 {
+    return;
+  }
+
   let ref_fold = &mut *fold_obj;
   let ref_creases = &mut *creases;
   let origin_face_angle = &record.face_angles;
@@ -173,6 +240,14 @@ fn joint_animation(
     f[idxs[1]][0] -= v01[0] * d;
     f[idxs[1]][1] -= v01[1] * d;
     f[idxs[1]][2] -= v01[2] * d;
+
+    if idxs[0] == 0 || idxs[1] == 0 {
+      println!(
+        "force from edge,  force={}, vec={}",
+        force,
+        vec_length(&[f[0][0], f[0][1], f[0][2]])
+      );
+    }
   }
 
   for (_ci, crease) in ref_creases.iter().enumerate() {
@@ -204,10 +279,6 @@ fn joint_animation(
 
     let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
     let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
-    println!(
-      "ci={},faces={:?} ,diff={:.3}, h0={:.3},h1={:.3}",
-      _ci, crease.face_idxs, diff, h0, h1
-    );
 
     if (c00).abs() < 0.00001 || (c01).abs() < 0.00001 {
       continue;
@@ -255,6 +326,17 @@ fn joint_animation(
     f[edge_vertices_idxs[1]][1] += (c00) * node0_f[1] + c01 * node1_f[1];
     f[edge_vertices_idxs[1]][2] += (c00) * node0_f[2] + c01 * node1_f[2];
 
+    if _ci == 34 {
+      println!(
+        "ci={},faces={:?} ,diff={:.3}, h0={:.3},h1={:.3}",
+        _ci, crease.face_idxs, diff, h0, h1
+      );
+
+      println!(
+        "force from angle,  force={}",
+        vec_length(&[f[0][0], f[0][1], f[0][2]])
+      );
+    }
     // f[edge_vertices_idxs[0]][0] += (c10) * node0_f[0] + (c11) * node1_f[0];
     // f[edge_vertices_idxs[0]][1] += (c10) * node0_f[1] + (c11) * node1_f[1];
     // f[edge_vertices_idxs[0]][2] += (c10) * node0_f[2] + (c11) * node1_f[2];
@@ -339,14 +421,21 @@ fn joint_animation(
 
   // let edge = &fold_obj.edges_vertices;
   //let positions = &mut *fold_obj.vertices_coords;
-  let delta_t = record.dt;
-  let decay = 1.0;
+  let delta_t = record.dt / 3.0;
   for (i, position) in &mut positions.iter_mut().enumerate() {
     //let a0 = f[i][0] / 1.0;
 
-    velocity[i][0] = velocity[i][0] * decay + f[i][0] / 1.0 * delta_t;
-    velocity[i][1] = velocity[i][1] * decay + f[i][1] / 1.0 * delta_t;
-    velocity[i][2] = velocity[i][2] * decay + f[i][2] / 1.0 * delta_t;
+    if i == 0 {
+      println!(
+        "i={}, force={}",
+        i,
+        vec_length(&[f[i][0], f[i][1], f[i][2]])
+      );
+    }
+
+    velocity[i][0] = velocity[i][0] + f[i][0] / 1.0 * delta_t;
+    velocity[i][1] = velocity[i][1] + f[i][1] / 1.0 * delta_t;
+    velocity[i][2] = velocity[i][2] + f[i][2] / 1.0 * delta_t;
 
     position[0] += velocity[i][0] * delta_t;
     position[1] += velocity[i][1] * delta_t;
