@@ -41,7 +41,7 @@ fn main() {
   let data = fs::read_to_string("./mesh-lib/src/bird2.fold").unwrap();
   let mut fold: Fold = serde_json::from_str(&data).unwrap();
   let creases = fold.get_creases();
-  let velocity = vec![[0.0f32, 0.0f32, 0.0f32]; fold.vertices_coords.len()];
+  let velocity = vec![Vec3::new(0.0, 0.0, 0.0); fold.vertices_coords.len()];
 
   let record = Record {
     fold_ratio: 0.3,
@@ -118,7 +118,7 @@ fn setup(
   // plane
   commands.spawn_bundle(PbrBundle {
     mesh: meshes.add(mesh),
-    material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+    material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
     ..default()
   });
 
@@ -209,7 +209,7 @@ fn joint_animation(
   mut fold_obj: ResMut<Fold>,
   mut creases: ResMut<Vec<Crease>>,
   record: Res<Record>,
-  mut velocity: ResMut<Vec<[f32; 3]>>,
+  mut velocity: ResMut<Vec<Vec3>>,
 ) {
   if record.state == 0 {
     return;
@@ -225,7 +225,7 @@ fn joint_animation(
   let length = (ref_fold.faces_vertices).len();
   let faces_vertices = &mut ref_fold.faces_vertices;
   let positions = &mut ref_fold.vertices_coords;
-  let mut f = vec![vec![0.0f32; 3]; length];
+  let mut f2 = vec![Vec3::new(0.0, 0.0, 0.0); length];
 
   let edges_vertices = &mut ref_fold.edges_vertices;
   for (i, idxs) in edges_vertices.iter().enumerate() {
@@ -238,30 +238,18 @@ fn joint_animation(
       panic!("err");
     }
     x01 = normalize(&x01);
-    f[idxs[0]][0] -= x01[0] * force;
-    f[idxs[0]][1] -= x01[1] * force;
-    f[idxs[0]][2] -= x01[2] * force;
 
-    f[idxs[1]][0] += x01[0] * force;
-    f[idxs[1]][1] += x01[1] * force;
-    f[idxs[1]][2] += x01[2] * force;
+    f2[idxs[0]] -= Vec3::from(x01) * force;
+    f2[idxs[1]] += Vec3::from(x01) * force;
 
     let d = record.percent_damping * 2.0 * (k * 1.0).sqrt();
-    let v01 = sub(&velocity[idxs[1]], &velocity[idxs[0]]);
-    f[idxs[0]][0] += v01[0] * d;
-    f[idxs[0]][1] += v01[1] * d;
-    f[idxs[0]][2] += v01[2] * d;
+    let v01 = velocity[idxs[1]] - velocity[idxs[0]];
 
-    f[idxs[1]][0] -= v01[0] * d;
-    f[idxs[1]][1] -= v01[1] * d;
-    f[idxs[1]][2] -= v01[2] * d;
+    f2[idxs[0]] += v01 * d;
+    f2[idxs[1]] -= v01 * d;
 
     if idxs[0] == 0 || idxs[1] == 0 {
-      println!(
-        "force from edge,  force={}, vec={}",
-        force,
-        vec_length(&[f[0][0], f[0][1], f[0][2]])
-      );
+      println!("force from edge,  force={}, vec={}", force, f2[0].length());
     }
   }
 
@@ -290,8 +278,8 @@ fn joint_animation(
     let k = edge_length * crease_stiffness;
     let rxn_force_scale = -1.0 * k * diff;
 
-    let normal0 = normals[crease.face_idxs[0]];
-    let normal1 = normals[crease.face_idxs[1]];
+    let normal0 = Vec3::from(normals[crease.face_idxs[0]]);
+    let normal1 = Vec3::from(normals[crease.face_idxs[1]]);
 
     let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
     let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
@@ -309,16 +297,11 @@ fn joint_animation(
     }
 
     let edge_vertices_idxs = crease.edge_vertices_idxs;
-    let node0_f = scale(&normal0, rxn_force_scale / h0);
-    let node1_f = scale(&normal1, rxn_force_scale / h1);
+    let node0_f = normal0 * rxn_force_scale / h0;
+    let node1_f = normal1 * rxn_force_scale / h1;
 
-    f[vertices_idxs[0]][0] -= 1.0 * node0_f[0];
-    f[vertices_idxs[0]][1] -= 1.0 * node0_f[1];
-    f[vertices_idxs[0]][2] -= 1.0 * node0_f[2];
-
-    f[vertices_idxs[1]][0] -= 1.0 * node1_f[0];
-    f[vertices_idxs[1]][1] -= 1.0 * node1_f[1];
-    f[vertices_idxs[1]][2] -= 1.0 * node1_f[2];
+    f2[vertices_idxs[0]] -= node0_f;
+    f2[vertices_idxs[1]] -= node1_f;
 
     // f[edge_vertices_idxs[0]][0] +=
     //     c10 / (c00 + c10) * node0_f[0] + c11 / (c01 + c11) * node1_f[0];
@@ -334,13 +317,8 @@ fn joint_animation(
     // f[edge_vertices_idxs[1]][2] +=
     //     c00 / (c00 + c10) * node0_f[2] + c01 / (c01 + c11) * node1_f[2];
 
-    f[edge_vertices_idxs[0]][0] += (1.0 - c00) * node0_f[0] + (1.0 - c01) * node1_f[0];
-    f[edge_vertices_idxs[0]][1] += (1.0 - c00) * node0_f[1] + (1.0 - c01) * node1_f[1];
-    f[edge_vertices_idxs[0]][2] += (1.0 - c00) * node0_f[2] + (1.0 - c01) * node1_f[2];
-
-    f[edge_vertices_idxs[1]][0] += (c00) * node0_f[0] + c01 * node1_f[0];
-    f[edge_vertices_idxs[1]][1] += (c00) * node0_f[1] + c01 * node1_f[1];
-    f[edge_vertices_idxs[1]][2] += (c00) * node0_f[2] + c01 * node1_f[2];
+    f2[edge_vertices_idxs[0]] += (1.0 - c00) * node0_f + (1.0 - c01) * node1_f;
+    f2[edge_vertices_idxs[1]] += (c00) * node0_f + (c01) * node1_f;
 
     if _ci == 34 {
       println!(
@@ -348,18 +326,8 @@ fn joint_animation(
         _ci, crease.face_idxs, diff, h0, h1
       );
 
-      println!(
-        "force from angle,  force={}",
-        vec_length(&[f[0][0], f[0][1], f[0][2]])
-      );
+      println!("force from angle,  force={}", f2[0].length());
     }
-    // f[edge_vertices_idxs[0]][0] += (c10) * node0_f[0] + (c11) * node1_f[0];
-    // f[edge_vertices_idxs[0]][1] += (c10) * node0_f[1] + (c11) * node1_f[1];
-    // f[edge_vertices_idxs[0]][2] += (c10) * node0_f[2] + (c11) * node1_f[2];
-
-    // f[edge_vertices_idxs[1]][0] += (1.0 - c10) * node0_f[0] + (1.0 - c11) * node1_f[0];
-    // f[edge_vertices_idxs[1]][1] += (1.0 - c10) * node0_f[1] + (1.0 - c11) * node1_f[1];
-    // f[edge_vertices_idxs[1]][2] += (1.0 - c10) * node0_f[2] + (1.0 - c11) * node1_f[2];
   }
 
   for (fi, idxs) in faces_vertices.iter().enumerate() {
@@ -389,69 +357,41 @@ fn joint_animation(
     let diff = sub(&angles, &origin_face_angle[fi]);
     let force = scale(&diff, -1.0 * record.face_stiffness);
 
-    let tmp_ba = scale(
+    let tmp_ba = Vec3::from(scale(
       &cross(&normal, &sub(&a, &b)),
       vec_length_square(&sub(&a, &b)),
-    );
-    let tmp_ab = scale(&tmp_ba, -1.0);
+    ));
+    let tmp_ab = -1.0 * tmp_ba;
 
-    let tmp_bc = scale(
+    let tmp_bc = Vec3::from(scale(
       &cross(&normal, &sub(&c, &b)),
       vec_length_square(&sub(&c, &b)),
-    );
-    let tmp_cb = scale(&tmp_bc, -1.0);
+    ));
+    let tmp_cb = -1.0 * tmp_bc;
 
-    let tmp_ca = scale(
+    let tmp_ca = Vec3::from(scale(
       &cross(&normal, &sub(&a, &c)),
       vec_length_square(&sub(&a, &c)),
-    );
-    let tmp_ac = scale(&tmp_ca, -1.0);
+    ));
+    let tmp_ac = -1.0 * tmp_ca;
 
-    // force[1] = 0.0;
-    // force[0] = 0.0;
-    // force[2] = 0.0;
-
-    f[idxs[0]][0] +=
-      force[1] * tmp_ba[0] + force[0] * (tmp_ab[0] - tmp_ac[0]) - force[2] * tmp_ca[0];
-    f[idxs[0]][1] +=
-      force[1] * tmp_ba[1] + force[0] * (tmp_ab[1] - tmp_ac[1]) - force[2] * tmp_ca[1];
-    f[idxs[0]][2] +=
-      force[1] * tmp_ba[2] + force[0] * (tmp_ab[2] - tmp_ac[2]) - force[2] * tmp_ca[2];
-
-    f[idxs[1]][0] +=
-      force[1] * (tmp_bc[0] - tmp_ba[0]) + force[0] * -1.0 * tmp_ab[0] + force[2] * tmp_cb[0];
-    f[idxs[1]][1] +=
-      force[1] * (tmp_bc[1] - tmp_ba[1]) + force[0] * -1.0 * tmp_ab[1] + force[2] * tmp_cb[1];
-    f[idxs[1]][2] +=
-      force[1] * (tmp_bc[2] - tmp_ba[2]) + force[0] * -1.0 * tmp_ab[2] + force[2] * tmp_cb[2];
-
-    f[idxs[2]][0] +=
-      force[1] * -1.0 * tmp_bc[0] + force[0] * tmp_ac[0] + force[2] * (tmp_ca[0] - tmp_cb[0]);
-    f[idxs[2]][1] +=
-      force[1] * -1.0 * tmp_bc[1] + force[0] * tmp_ac[1] + force[2] * (tmp_ca[1] - tmp_cb[1]);
-    f[idxs[2]][2] +=
-      force[1] * -1.0 * tmp_bc[2] + force[0] * tmp_ac[2] + force[2] * (tmp_ca[2] - tmp_cb[2]);
+    f2[idxs[0]] += force[1] * tmp_ba + force[0] * (tmp_ab - tmp_ac) - force[2] * tmp_ca;
+    f2[idxs[1]] += force[1] * (tmp_bc - tmp_ba) - force[0] * tmp_ab + force[2] * tmp_cb;
+    f2[idxs[2]] += -force[1] * tmp_bc + force[0] * tmp_ac + force[2] * (tmp_ca - tmp_cb);
   }
 
-  //println!("{:?}", edge_lengths);
-
-  // let edge = &fold_obj.edges_vertices;
   //let positions = &mut *fold_obj.vertices_coords;
   let delta_t = record.dt / 3.0;
   for (i, position) in &mut positions.iter_mut().enumerate() {
     //let a0 = f[i][0] / 1.0;
 
     if i == 0 {
-      println!(
-        "i={}, force={}",
-        i,
-        vec_length(&[f[i][0], f[i][1], f[i][2]])
-      );
+      println!("i={}, f2={}", i, f2[i].length());
     }
 
-    velocity[i][0] = velocity[i][0] + f[i][0] / 1.0 * delta_t;
-    velocity[i][1] = velocity[i][1] + f[i][1] / 1.0 * delta_t;
-    velocity[i][2] = velocity[i][2] + f[i][2] / 1.0 * delta_t;
+    //    let tmp_f = Vec3::from(f[i]);
+
+    velocity[i] += delta_t * f2[i] / 1.0;
 
     position[0] += velocity[i][0] * delta_t;
     position[1] += velocity[i][1] * delta_t;
