@@ -1,10 +1,9 @@
+use crate::{RatioText, Record, StatusText};
 use bevy::{
   input::{keyboard::KeyboardInput, ButtonState},
   prelude::{EventReader, KeyCode, Query, Res, ResMut, With, Without},
   text::Text,
 };
-
-use crate::{RatioText, Record, StatusText};
 
 pub fn text_update_system(
   record: Res<Record>,
@@ -24,7 +23,6 @@ pub fn text_update_system(
   }
 }
 
-/// This system prints out all keyboard events as they come in
 pub fn print_keyboard_event_system(
   mut keyboard_input_events: EventReader<KeyboardInput>,
   mut record: ResMut<Record>,
