@@ -1,9 +1,10 @@
+use bevy::prelude::Vec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub mod vec_math;
 
-use crate::vec_math::{cross, dot, normalize, points_cross, points_length, scale, sub, vec_length};
+use crate::vec_math::{cross, dot, normalize, points_cross_vec3, scale, sub, vec_length};
 
 fn map_key(a: usize, b: usize) -> String {
   if a < b {
@@ -21,7 +22,7 @@ pub struct Fold {
   pub file_classes: Vec<String>,
   pub frame_attributes: Vec<String>,
   pub frame_unit: String,
-  pub vertices_coords: Vec<[f32; 3]>,
+  pub vertices_coords: Vec<Vec3>,
   pub edges_vertices: Vec<[usize; 2]>,
   pub edges_assignment: Vec<String>,
   pub faces_vertices: Vec<[usize; 3]>,
@@ -44,7 +45,7 @@ pub struct Crease {
 }
 
 impl Crease {
-  pub fn get_0_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
+  pub fn get_0_coef(&self, vertices_coords: &Vec<Vec3>) -> [f32; 4] {
     let p0 = vertices_coords[self.edge_vertices_idxs[0]];
     let t0 = vertices_coords[self.top_vertices_idxs[0]];
     let t1 = vertices_coords[self.top_vertices_idxs[1]];
@@ -121,21 +122,29 @@ impl Fold {
     for idxs in edges_vertices.iter() {
       let v0 = vertices_coords[idxs[0]];
       let v1 = vertices_coords[idxs[1]];
-      ret_vec.push(points_length(&v0, &v1));
+      //ret_vec.push(points_length(&v0, &v1));
+      ret_vec.push((v1 - v0).length());
     }
     ret_vec
   }
 
-  pub fn get_normals(&self) -> Vec<[f32; 3]> {
+  pub fn get_normals(&self) -> Vec<Vec3> {
     let faces_vertices = &self.faces_vertices;
     let vertices_coords = &self.vertices_coords;
-    let mut ret_vec: Vec<[f32; 3]> = Vec::new();
+    let mut ret_vec: Vec<Vec3> = Vec::new();
     for idxs in faces_vertices {
-      let normal = normalize(&points_cross(
-        &vertices_coords[idxs[0]],
-        &vertices_coords[idxs[1]],
-        &vertices_coords[idxs[2]],
-      ));
+      let normal = points_cross_vec3(
+        vertices_coords[idxs[0]],
+        vertices_coords[idxs[1]],
+        vertices_coords[idxs[2]],
+      )
+      .normalize();
+
+      // let normal = normalize(&points_cross(
+      //   &vertices_coords[idxs[0]],
+      //   &vertices_coords[idxs[1]],
+      //   &vertices_coords[idxs[2]],
+      // ));
       ret_vec.push(normal);
     }
     ret_vec
@@ -150,14 +159,27 @@ impl Fold {
       let a = positions[idxs[0]];
       let b = positions[idxs[1]];
       let c = positions[idxs[2]];
-      let ab = normalize(&sub(&b, &a));
-      let ac = normalize(&sub(&c, &a));
-      let bc = normalize(&sub(&c, &b));
+
+      let ab = (b - a).normalize();
+      let ac = (c - a).normalize();
+      let bc = (c - b).normalize();
       ret_vec.push([
-        dot(&ab, &ac).acos(),
-        (-1.0 * dot(&ab, &bc)).acos(),
-        dot(&ac, &bc).acos(),
+        ab.dot(ac).acos(),
+        //dot(&ab, &ac).acos(),
+        -1.0 * ab.dot(bc).acos(),
+        //(-1.0 * dot(&ab, &bc)).acos(),
+        //dot(&ac, &bc).acos(),
+        ac.dot(bc).acos(),
       ]);
+
+      // let ab = normalize(&sub(&b, &a));
+      // let ac = normalize(&sub(&c, &a));
+      // let bc = normalize(&sub(&c, &b));
+      // ret_vec.push([
+      //   dot(&ab, &ac).acos(),
+      //   (-1.0 * dot(&ab, &bc)).acos(),
+      //   dot(&ac, &bc).acos(),
+      // ]);
     }
     ret_vec
   }
@@ -257,7 +279,7 @@ impl Fold {
 
         zero_vec.push(Crease {
           edge_vertices_idxs: idxs.clone(),
-          origin_lentgh: points_length(&vertices_coords[idxs[0]], &vertices_coords[idxs[1]]),
+          origin_lentgh: (vertices_coords[idxs[0]] - vertices_coords[idxs[1]]).length(),
           face_idxs: [new_val[0], new_val[1]],
 
           assignment: edges_assignment[i].clone(),

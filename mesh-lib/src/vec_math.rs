@@ -7,6 +7,12 @@ pub fn points_cross(a: &[f32; 3], b: &[f32; 3], c: &[f32; 3]) -> [f32; 3] {
   cross(&ac, &ab)
 }
 
+pub fn points_cross_vec3(a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
+  let ab = b - a;
+  let ac = c - a;
+  ac.cross(ab)
+}
+
 pub fn cross(a: &[f32; 3], b: &[f32; 3]) -> [f32; 3] {
   let aa = Vec3::from(*a);
   let bb = Vec3::from(*b);
