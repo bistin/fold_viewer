@@ -1,6 +1,5 @@
-use bevy::input::keyboard::KeyCode;
-use bevy::input::keyboard::KeyboardInput;
-use bevy::input::ButtonState;
+mod system;
+
 use bevy::prelude::*;
 use bevy::render::mesh::PrimitiveTopology;
 use bevy_inspector_egui::WorldInspectorPlugin;
@@ -17,7 +16,7 @@ use std::fs;
 
 use bevy::render::mesh::{Indices, Mesh};
 
-struct Record {
+pub struct Record {
   face_angles: Vec<[f32; 3]>,
   edge_lengths: Vec<f32>,
   dt: f32,
@@ -31,10 +30,10 @@ struct Record {
 }
 
 #[derive(Component)]
-struct RatioText;
+pub struct RatioText;
 
 #[derive(Component)]
-struct StatusText;
+pub struct StatusText;
 
 fn main() {
   let axial_stiffness = 20.0;
@@ -67,8 +66,8 @@ fn main() {
     .add_plugin(WorldInspectorPlugin::new())
     .add_startup_system(setup)
     .add_system(joint_animation)
-    .add_system(print_keyboard_event_system)
-    .add_system(text_update_system)
+    .add_system(crate::system::print_keyboard_event_system)
+    .add_system(crate::system::text_update_system)
     .add_system(bevy::window::close_on_esc)
     .add_plugin(OrbitCameraPlugin::default())
     //.add_plugin(ScheduleRunnerPlugin(Duration::from_secs_f64(1.0 / 60.0)))
@@ -203,56 +202,6 @@ fn setup(
       Vec3::new(0.0, 5.0, 0.0),
       Vec3::new(0., 0., 0.),
     ));
-}
-
-/// This system prints out all keyboard events as they come in
-fn print_keyboard_event_system(
-  mut keyboard_input_events: EventReader<KeyboardInput>,
-  mut record: ResMut<Record>,
-) {
-  for ev in keyboard_input_events.iter() {
-    match ev.state {
-      ButtonState::Pressed => {
-        println!("Key press: {:?} ({})", ev.key_code, ev.scan_code);
-        if let Some(code) = ev.key_code {
-          if code == KeyCode::Space {
-            if record.state == 0 {
-              record.state = 1;
-            } else {
-              record.state = 0;
-            }
-          }
-
-          if code == KeyCode::Q {
-            record.fold_ratio -= 0.1;
-          }
-
-          if code == KeyCode::W {
-            record.fold_ratio += 0.1;
-          }
-        }
-      }
-      ButtonState::Released => {}
-    }
-  }
-}
-
-fn text_update_system(
-  record: Res<Record>,
-  mut query: Query<&mut Text, (With<RatioText>, Without<StatusText>)>,
-  mut query2: Query<&mut Text, With<StatusText>>,
-) {
-  for mut text in &mut query {
-    text.sections[1].value = format!("{:.2}", record.fold_ratio);
-  }
-
-  for mut text in &mut query2 {
-    text.sections[1].value = if record.state == 0 {
-      "stop".to_string()
-    } else {
-      "simulation".to_string()
-    }
-  }
 }
 
 fn joint_animation(
