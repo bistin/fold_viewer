@@ -100,33 +100,10 @@ impl Crease {
     sub(&a, &b)
   }
 
-  pub fn get_normals(
-    &self,
-    vertices_coords: &Vec<[f32; 3]>,
-    faces_vertices: &Vec<[usize; 3]>,
-  ) -> [[f32; 3]; 2] {
+  pub fn get_theta(&self, normals: &Vec<[f32; 3]>, vertices_coords: &Vec<[f32; 3]>) -> f32 {
     let val = &self.face_idxs;
-
-    let normal0 = normalize(&points_cross(
-      &vertices_coords[faces_vertices[val[0]][0]],
-      &vertices_coords[faces_vertices[val[0]][1]],
-      &vertices_coords[faces_vertices[val[0]][2]],
-    ));
-
-    let normal1 = normalize(&points_cross(
-      &vertices_coords[faces_vertices[val[1]][0]],
-      &vertices_coords[faces_vertices[val[1]][1]],
-      &vertices_coords[faces_vertices[val[1]][2]],
-    ));
-    [normal0, normal1]
-  }
-
-  pub fn get_theta(
-    &self,
-    vertices_coords: &Vec<[f32; 3]>,
-    faces_vertices: &Vec<[usize; 3]>,
-  ) -> f32 {
-    let [normal0, normal1] = self.get_normals(vertices_coords, faces_vertices);
+    let normal0 = normals[val[0]];
+    let normal1 = normals[val[1]];
 
     let dot_normals = dot(&normal0, &normal1).clamp(-1.0, 1.0);
     let crease_vector = normalize(&self.get_edge_vector(vertices_coords));

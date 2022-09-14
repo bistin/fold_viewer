@@ -215,11 +215,13 @@ fn joint_animation(
     return;
   }
 
+  // calculate all normals
+  let normals = fold_obj.get_normals();
+
   let ref_fold = &mut *fold_obj;
   let ref_creases = &mut *creases;
   let origin_face_angle = &record.face_angles;
   let edge_lengths = &record.edge_lengths;
-  // calculate all normals
   let length = (ref_fold.faces_vertices).len();
   let faces_vertices = &mut ref_fold.faces_vertices;
   let positions = &mut ref_fold.vertices_coords;
@@ -266,7 +268,7 @@ fn joint_animation(
   for (_ci, crease) in ref_creases.iter().enumerate() {
     // crease
     let vertices_idxs = crease.top_vertices_idxs;
-    let theta = crease.get_theta(positions, faces_vertices);
+    let theta = crease.get_theta(&normals, &positions);
     let mut diff = theta - record.fold_ratio * crease.target_angle;
 
     if vec_length(&crease.get_edge_vector(positions)) < 0.00001 {
@@ -288,7 +290,8 @@ fn joint_animation(
     let k = edge_length * crease_stiffness;
     let rxn_force_scale = -1.0 * k * diff;
 
-    let [normal0, normal1] = crease.get_normals(positions, faces_vertices);
+    let normal0 = normals[crease.face_idxs[0]];
+    let normal1 = normals[crease.face_idxs[1]];
 
     let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
     let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
