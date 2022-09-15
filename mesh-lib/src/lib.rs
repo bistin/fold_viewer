@@ -74,7 +74,7 @@ impl Crease {
     let t0 = vertices_coords[self.top_vertices_idxs[0]];
     let t1 = vertices_coords[self.top_vertices_idxs[1]];
 
-    let crease = self.get_edge_vector(vertices_coords).normalize();
+    let crease = self.get_edge_vector(vertices_coords).normalize() * -1.0;
 
     let v0 = (t0 - p0).normalize();
     let v1 = (t1 - p0).normalize();

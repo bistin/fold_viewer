@@ -355,9 +355,9 @@ fn joint_animation(
 
     let diff = sub(&angles, &origin_face_angle[fi]);
     let mut force = scale(&diff, -1.0 * record.face_stiffness);
-    force[0] = 0.0;
-    force[1] = 0.0;
-    force[2] = 0.0;
+    // force[0] = 0.0;
+    // force[1] = 0.0;
+    // force[2] = 0.0;
     // let tmp_ba = Vec3::from(scale(
     //   &cross(&normal, &sub(&a, &b)),
     //   vec_length_square(&sub(&a, &b)),
@@ -401,10 +401,10 @@ fn joint_animation(
 
     velocity[i] += delta_t * f2[i] / 1.0;
 
-    *position += velocity[i] * delta_t;
-    // position[0] += velocity[i][0] * delta_t;
-    // position[1] += velocity[i][1] * delta_t;
-    // position[2] += velocity[i][2] * delta_t;
+    //*position += velocity[i] * delta_t;
+    position[0] += velocity[i][0] * delta_t;
+    position[1] += velocity[i][1] * delta_t;
+    position[2] += velocity[i][2] * delta_t;
   }
 
   for (_handle_id, mesh) in meshes.iter_mut() {
