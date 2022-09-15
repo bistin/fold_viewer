@@ -9,7 +9,7 @@ use smooth_bevy_cameras::controllers::orbit::{
 use smooth_bevy_cameras::LookTransformPlugin;
 
 use mesh_lib::vec_math::{
-  cross, dot, normalize, points_cross, scale, sub, vec_length, vec_length_square,
+  cross, dot, normalize, points_cross, points_cross_vec3, scale, sub, vec_length, vec_length_square,
 };
 use mesh_lib::{Crease, Fold};
 use std::fs;
@@ -38,7 +38,7 @@ pub struct StatusText;
 fn main() {
   let axial_stiffness = 20.0;
 
-  let data = fs::read_to_string("./mesh-lib/src/crand.fold").unwrap();
+  let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
   let mut fold: Fold = serde_json::from_str(&data).unwrap();
   let creases = fold.get_creases();
   let velocity = vec![Vec3::new(0.0, 0.0, 0.0); fold.vertices_coords.len()];
@@ -230,17 +230,17 @@ fn joint_animation(
   let edges_vertices = &mut ref_fold.edges_vertices;
   for (i, idxs) in edges_vertices.iter().enumerate() {
     // edge
-    let mut x01 = sub(&positions[idxs[1]], &positions[idxs[0]]);
-    let new_length = vec_length(&x01);
+    let mut x01 = positions[idxs[1]] - positions[idxs[0]];
+    let new_length = x01.length();
     let k = record.axial_stiffness / edge_lengths[i];
     let force = rxn_force(k, new_length, edge_lengths[i]);
     if f32::is_nan(force) || f32::is_infinite(force) {
       panic!("err");
     }
-    x01 = normalize(&x01);
+    x01 = x01.normalize();
 
-    f2[idxs[0]] -= Vec3::from(x01) * force;
-    f2[idxs[1]] += Vec3::from(x01) * force;
+    f2[idxs[0]] -= x01 * force;
+    f2[idxs[1]] += x01 * force;
 
     let d = record.percent_damping * 2.0 * (k * 1.0).sqrt();
     let v01 = velocity[idxs[1]] - velocity[idxs[0]];
@@ -259,7 +259,7 @@ fn joint_animation(
     let theta = crease.get_theta(&normals, &positions);
     let mut diff = theta - record.fold_ratio * crease.target_angle;
 
-    if vec_length(&crease.get_edge_vector(positions)) < 0.00001 {
+    if crease.get_edge_vector(positions).length() < 0.00001 {
       continue;
     }
 
@@ -278,8 +278,8 @@ fn joint_animation(
     let k = edge_length * crease_stiffness;
     let rxn_force_scale = -1.0 * k * diff;
 
-    let normal0 = Vec3::from(normals[crease.face_idxs[0]]);
-    let normal1 = Vec3::from(normals[crease.face_idxs[1]]);
+    let normal0 = normals[crease.face_idxs[0]];
+    let normal1 = normals[crease.face_idxs[1]];
 
     let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
     let [c10, c11, _h00, _h11] = crease.get_1_coef(&positions);
@@ -334,44 +334,53 @@ fn joint_animation(
     let a = positions[idxs[0]];
     let b = positions[idxs[1]];
     let c = positions[idxs[2]];
-    let len_ab = vec_length(&sub(&a, &b));
-    let len_bc = vec_length(&sub(&b, &c));
-    let len_ca = vec_length(&sub(&c, &a));
+    let len_ab = (a - b).length();
+    let len_bc = (b - c).length();
+    let len_ca = (c - a).length();
 
     if len_ab < 0.000001 || len_bc < 0.000001 || len_ca < 0.000001 {
       continue;
     }
 
-    let ab = normalize(&sub(&b, &a));
-    let ac = normalize(&sub(&c, &a));
-    let bc = normalize(&sub(&c, &b));
+    let ab = (b - a).normalize();
+    let ac = (c - a).normalize();
+    let bc = (c - b).normalize();
     let angles = [
-      dot(&ab, &ac).acos(),
-      (-1.0 * dot(&ab, &bc)).acos(),
-      dot(&ac, &bc).acos(),
+      ab.dot(ac).acos(),
+      -ab.dot(bc).acos(),
+      ac.dot(bc).acos(), //dot(&ac, &bc).acos(),
     ];
 
-    let normal = normalize(&points_cross(&a, &b, &c));
+    let normal = points_cross_vec3(a, b, c).normalize();
 
     let diff = sub(&angles, &origin_face_angle[fi]);
-    let force = scale(&diff, -1.0 * record.face_stiffness);
+    let mut force = scale(&diff, -1.0 * record.face_stiffness);
+    force[0] = 0.0;
+    force[1] = 0.0;
+    force[2] = 0.0;
+    // let tmp_ba = Vec3::from(scale(
+    //   &cross(&normal, &sub(&a, &b)),
+    //   vec_length_square(&sub(&a, &b)),
+    // ));
 
-    let tmp_ba = Vec3::from(scale(
-      &cross(&normal, &sub(&a, &b)),
-      vec_length_square(&sub(&a, &b)),
-    ));
+    let tmp_ba = normal.cross(a - b) / (a - b).length_squared();
     let tmp_ab = -1.0 * tmp_ba;
 
-    let tmp_bc = Vec3::from(scale(
-      &cross(&normal, &sub(&c, &b)),
-      vec_length_square(&sub(&c, &b)),
-    ));
+    // let tmp_bc = Vec3::from(scale(
+    //   &cross(&normal, &sub(&c, &b)),
+    //   vec_length_square(&sub(&c, &b)),
+    // ));
+
+    let tmp_bc = normal.cross(c - b) / (c - b).length_squared();
     let tmp_cb = -1.0 * tmp_bc;
 
-    let tmp_ca = Vec3::from(scale(
-      &cross(&normal, &sub(&a, &c)),
-      vec_length_square(&sub(&a, &c)),
-    ));
+    // let tmp_ca = Vec3::from(scale(
+    //   &cross(&normal, &sub(&a, &c)),
+    //   vec_length_square(&sub(&a, &c)),
+    // ));
+
+    let tmp_ca = normal.cross(a - c) / (a - c).length_squared();
+
     let tmp_ac = -1.0 * tmp_ca;
 
     f2[idxs[0]] += force[1] * tmp_ba + force[0] * (tmp_ab - tmp_ac) - force[2] * tmp_ca;
@@ -392,9 +401,10 @@ fn joint_animation(
 
     velocity[i] += delta_t * f2[i] / 1.0;
 
-    position[0] += velocity[i][0] * delta_t;
-    position[1] += velocity[i][1] * delta_t;
-    position[2] += velocity[i][2] * delta_t;
+    *position += velocity[i] * delta_t;
+    // position[0] += velocity[i][0] * delta_t;
+    // position[1] += velocity[i][1] * delta_t;
+    // position[2] += velocity[i][2] * delta_t;
   }
 
   for (_handle_id, mesh) in meshes.iter_mut() {

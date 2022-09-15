@@ -50,13 +50,13 @@ impl Crease {
     let t0 = vertices_coords[self.top_vertices_idxs[0]];
     let t1 = vertices_coords[self.top_vertices_idxs[1]];
 
-    let crease = normalize(&self.get_edge_vector(vertices_coords));
+    let crease = self.get_edge_vector(vertices_coords).normalize();
 
-    let v0 = normalize(&sub(&t0, &p0));
-    let v1 = normalize(&sub(&t1, &p0));
+    let v0 = (t0 - p0).normalize();
+    let v1 = (t1 - p0).normalize();
 
-    let cos0 = dot(&v0, &crease).clamp(-1.0, 1.0);
-    let cos1 = dot(&v1, &crease).clamp(-1.0, 1.0);
+    let cos0 = v0.dot(crease).clamp(-1.0, 1.0);
+    let cos1 = v1.dot(crease).clamp(-1.0, 1.0);
 
     let sin0 = (1.0 - cos0 * cos0).sqrt();
     let sin1 = (1.0 - cos1 * cos1).sqrt();
@@ -64,23 +64,23 @@ impl Crease {
     [
       cos0,
       cos1,
-      vec_length(&sub(&t0, &p0)) * sin0 * 1.0,
-      vec_length(&sub(&t1, &p0)) * sin1 * 1.0,
+      (t0 - p0).length_squared() * sin0 * 1.0,
+      (t1 - p0).length_squared() * sin1 * 1.0,
     ]
   }
 
-  pub fn get_1_coef(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 4] {
+  pub fn get_1_coef(&self, vertices_coords: &Vec<Vec3>) -> [f32; 4] {
     let p0 = vertices_coords[self.edge_vertices_idxs[1]];
     let t0 = vertices_coords[self.top_vertices_idxs[0]];
     let t1 = vertices_coords[self.top_vertices_idxs[1]];
 
-    let crease = scale(&normalize(&self.get_edge_vector(vertices_coords)), -1.0);
+    let crease = self.get_edge_vector(vertices_coords).normalize();
 
-    let v0 = normalize(&sub(&t0, &p0));
-    let v1 = normalize(&sub(&t1, &p0));
+    let v0 = (t0 - p0).normalize();
+    let v1 = (t1 - p0).normalize();
 
-    let cos0 = dot(&v0, &crease).clamp(-1.0, 1.0);
-    let cos1 = dot(&v1, &crease).clamp(-1.0, 1.0);
+    let cos0 = v0.dot(crease).clamp(-1.0, 1.0);
+    let cos1 = v1.dot(crease).clamp(-1.0, 1.0);
 
     let sin0 = (1.0 - cos0 * cos0).sqrt();
     let sin1 = (1.0 - cos1 * cos1).sqrt();
@@ -88,28 +88,29 @@ impl Crease {
     [
       cos0,
       cos1,
-      vec_length(&sub(&t0, &p0)) * sin0 * 1.0,
-      vec_length(&sub(&t1, &p0)) * sin1 * 1.0,
+      (t0 - p0).length_squared() * sin0 * 1.0,
+      (t1 - p0).length_squared() * sin1 * 1.0,
     ]
   }
 
-  pub fn get_edge_vector(&self, vertices_coords: &Vec<[f32; 3]>) -> [f32; 3] {
+  pub fn get_edge_vector(&self, vertices_coords: &Vec<Vec3>) -> Vec3 {
     // v01 = v1 - v0
     let edge_vertices_idxs = &self.edge_vertices_idxs;
-    let a = vertices_coords[edge_vertices_idxs[1]];
-    let b = vertices_coords[edge_vertices_idxs[0]];
-    sub(&a, &b)
+    let v1 = vertices_coords[edge_vertices_idxs[1]];
+    let v0 = vertices_coords[edge_vertices_idxs[0]];
+    v1 - v0
   }
 
-  pub fn get_theta(&self, normals: &Vec<[f32; 3]>, vertices_coords: &Vec<[f32; 3]>) -> f32 {
+  pub fn get_theta(&self, normals: &Vec<Vec3>, vertices_coords: &Vec<Vec3>) -> f32 {
     let val = &self.face_idxs;
     let normal0 = normals[val[0]];
     let normal1 = normals[val[1]];
 
-    let dot_normals = dot(&normal0, &normal1).clamp(-1.0, 1.0);
-    let crease_vector = normalize(&self.get_edge_vector(vertices_coords));
-    let res = dot(&cross(&normal0, &crease_vector), &normal1).atan2(dot_normals);
-    res
+    let dot_normals = normal0.dot(normal1).clamp(-1.0, 1.0);
+    let crease_vector = self.get_edge_vector(vertices_coords).normalize();
+    // let res = dot(&cross(&normal0, &crease_vector), &normal1).atan2(dot_normals);
+    // res
+    normal0.cross(crease_vector).dot(normal1).atan2(dot_normals)
   }
 }
 
