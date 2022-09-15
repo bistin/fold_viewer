@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub mod vec_math;
 
-use crate::vec_math::{cross, dot, normalize, points_cross_vec3, scale, sub, vec_length};
+use crate::vec_math::points_cross_vec3;
 
 fn map_key(a: usize, b: usize) -> String {
   if a < b {
@@ -64,8 +64,8 @@ impl Crease {
     [
       cos0,
       cos1,
-      (t0 - p0).length_squared() * sin0 * 1.0,
-      (t1 - p0).length_squared() * sin1 * 1.0,
+      (t0 - p0).length() * sin0 * 1.0,
+      (t1 - p0).length() * sin1 * 1.0,
     ]
   }
 
@@ -88,8 +88,8 @@ impl Crease {
     [
       cos0,
       cos1,
-      (t0 - p0).length_squared() * sin0 * 1.0,
-      (t1 - p0).length_squared() * sin1 * 1.0,
+      (t0 - p0).length() * sin0 * 1.0,
+      (t1 - p0).length() * sin1 * 1.0,
     ]
   }
 
@@ -166,21 +166,9 @@ impl Fold {
       let bc = (c - b).normalize();
       ret_vec.push([
         ab.dot(ac).acos(),
-        //dot(&ab, &ac).acos(),
         -1.0 * ab.dot(bc).acos(),
-        //(-1.0 * dot(&ab, &bc)).acos(),
-        //dot(&ac, &bc).acos(),
         ac.dot(bc).acos(),
       ]);
-
-      // let ab = normalize(&sub(&b, &a));
-      // let ac = normalize(&sub(&c, &a));
-      // let bc = normalize(&sub(&c, &b));
-      // ret_vec.push([
-      //   dot(&ab, &ac).acos(),
-      //   (-1.0 * dot(&ab, &bc)).acos(),
-      //   dot(&ac, &bc).acos(),
-      // ]);
     }
     ret_vec
   }
@@ -195,9 +183,9 @@ impl Fold {
         for idxs in edges_vertices.iter() {
           let x0 = positions[idxs[0]];
           let x1 = positions[idxs[1]];
-          let x01 = [x1[0] - x0[0], x1[1] - x0[1], x1[2] - x0[2]];
+          let x01 = x1 - x0;
 
-          let length = vec_length(&x01);
+          let length = x01.length();
 
           let k = axial_stiffness / length;
           let natural_freq = k.sqrt();

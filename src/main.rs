@@ -8,9 +8,7 @@ use smooth_bevy_cameras::controllers::orbit::{
 };
 use smooth_bevy_cameras::LookTransformPlugin;
 
-use mesh_lib::vec_math::{
-  cross, dot, normalize, points_cross, points_cross_vec3, scale, sub, vec_length, vec_length_square,
-};
+use mesh_lib::vec_math::{points_cross_vec3, scale, sub};
 use mesh_lib::{Crease, Fold};
 use std::fs;
 
@@ -363,7 +361,7 @@ fn joint_animation(
     //   vec_length_square(&sub(&a, &b)),
     // ));
 
-    let tmp_ba = normal.cross(a - b) / (a - b).length_squared();
+    let tmp_ba = normal.cross(a - b) * (a - b).length_squared();
     let tmp_ab = -1.0 * tmp_ba;
 
     // let tmp_bc = Vec3::from(scale(
@@ -371,7 +369,7 @@ fn joint_animation(
     //   vec_length_square(&sub(&c, &b)),
     // ));
 
-    let tmp_bc = normal.cross(c - b) / (c - b).length_squared();
+    let tmp_bc = normal.cross(c - b) * (c - b).length_squared();
     let tmp_cb = -1.0 * tmp_bc;
 
     // let tmp_ca = Vec3::from(scale(
@@ -379,7 +377,7 @@ fn joint_animation(
     //   vec_length_square(&sub(&a, &c)),
     // ));
 
-    let tmp_ca = normal.cross(a - c) / (a - c).length_squared();
+    let tmp_ca = normal.cross(a - c) * (a - c).length_squared();
 
     let tmp_ac = -1.0 * tmp_ca;
 
