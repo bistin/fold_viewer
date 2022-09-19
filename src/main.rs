@@ -343,9 +343,9 @@ fn joint_animation(
     // force[1] = 0.0;
     // force[2] = 0.0;
 
-    let tmp_ba = normal.cross(a - b) * (a - b).length_squared();
-    let tmp_bc = normal.cross(c - b) * (c - b).length_squared();
-    let tmp_ca = normal.cross(a - c) * (a - c).length_squared();
+    let tmp_ba = normal.cross(a - b) / len_ab;
+    let tmp_bc = normal.cross(c - b) / len_bc;
+    let tmp_ca = normal.cross(a - c) / len_ca;
     let tmp_ab = -1.0 * tmp_ba;
     let tmp_cb = -1.0 * tmp_bc;
     let tmp_ac = -1.0 * tmp_ca;
