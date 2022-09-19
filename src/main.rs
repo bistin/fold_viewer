@@ -15,6 +15,7 @@ use std::fs;
 use bevy::render::mesh::{Indices, Mesh};
 
 pub struct Record {
+  original_position: Vec<Vec3>,
   face_angles: Vec<[f32; 3]>,
   edge_lengths: Vec<f32>,
   dt: f32,
@@ -41,8 +42,11 @@ fn main() {
   let creases = fold.get_creases();
   let velocity = vec![Vec3::new(0.0, 0.0, 0.0); fold.vertices_coords.len()];
 
+  let original_position = fold.vertices_coords.clone();
+
   let record = Record {
     fold_ratio: 0.3,
+    original_position,
     axial_stiffness,
     crease_crease_stiffness: 0.70,
     flat_crease_stiffness: 0.70,
@@ -72,9 +76,6 @@ fn main() {
     .run();
 }
 
-fn rxn_force(k: f32, value: f32, target: f32) -> f32 {
-  -1.0 * k * (value - target)
-}
 /// set up a simple 3D scene
 fn setup(
   mut commands: Commands,
@@ -220,6 +221,7 @@ fn joint_animation(
   let ref_creases = &mut *creases;
   let origin_face_angle = &record.face_angles;
   let edge_lengths = &record.edge_lengths;
+  let original_position = &record.original_position;
   let length = (ref_fold.faces_vertices).len();
   let faces_vertices = &mut ref_fold.faces_vertices;
   let positions = &mut ref_fold.vertices_coords;
@@ -228,23 +230,19 @@ fn joint_animation(
   let edges_vertices = &mut ref_fold.edges_vertices;
   for (i, idxs) in edges_vertices.iter().enumerate() {
     // edge
-    let mut x01 = positions[idxs[1]] - positions[idxs[0]];
-    let new_length = x01.length();
+    let x01 = positions[idxs[1]] - positions[idxs[0]];
+
+    let l = x01.length();
     let k = record.axial_stiffness / edge_lengths[i];
-    let force = rxn_force(k, new_length, edge_lengths[i]);
+    let force = k * (l - edge_lengths[i]);
     if f32::is_nan(force) || f32::is_infinite(force) {
       panic!("err");
     }
-    x01 = x01.normalize();
-
-    f[idxs[0]] -= x01 * force;
-    f[idxs[1]] += x01 * force;
-
-    let d = record.percent_damping * 2.0 * (k * 1.0).sqrt();
+    let c = record.percent_damping * 2.0 * (k * 1.0).sqrt();
     let v01 = velocity[idxs[1]] - velocity[idxs[0]];
 
-    f[idxs[0]] += v01 * d;
-    f[idxs[1]] -= v01 * d;
+    f[idxs[0]] += x01 / l * force + c * v01;
+    f[idxs[1]] -= x01 / l * force + c * v01;
 
     if idxs[0] == 0 || idxs[1] == 0 {
       println!("force from edge,  force={}, vec={}", force, f[0].length());
@@ -282,11 +280,11 @@ fn joint_animation(
     let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
     let [c10, c11, _h0, _h1] = crease.get_1_coef(&positions);
 
-    if (c00).abs() < 0.00001 || (c01).abs() < 0.00001 {
+    if (c00).abs() < 0.01 || (c01).abs() < 0.01 {
       continue;
     }
 
-    if (c10).abs() < 0.01 || (c11).abs() < 0.00001 {
+    if (c10).abs() < 0.01 || (c11).abs() < 0.01 {
       continue;
     }
 
