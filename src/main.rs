@@ -277,8 +277,14 @@ fn joint_animation(
     let normal0 = normals[crease.face_idxs[0]];
     let normal1 = normals[crease.face_idxs[1]];
 
-    let [c00, c01, h0, h1] = crease.get_0_coef(&positions);
-    let [c10, c11, _h0, _h1] = crease.get_1_coef(&positions);
+    let [c00, c01, h0, h1, s00, s01] = crease.get_0_coef(&positions);
+    let [c10, c11, _h0, _h1, s10, s11] = crease.get_1_coef(&positions);
+
+    let cot00 = c00 / s00;
+    let cot01 = c01 / s01;
+
+    let cot10 = c10 / s10;
+    let cot11 = c11 / s11;
 
     if (c00).abs() < 0.01 || (c01).abs() < 0.01 {
       continue;
@@ -299,8 +305,10 @@ fn joint_animation(
     f[vertices_idxs[0]] -= node0_f;
     f[vertices_idxs[1]] -= node1_f;
 
-    f[edge_vertices_idxs[0]] += (1.0 - c00) * node0_f + (1.0 - c01) * node1_f;
-    f[edge_vertices_idxs[1]] += (c00) * node0_f + (c01) * node1_f;
+    f[edge_vertices_idxs[0]] +=
+      (cot10) / (cot00 + cot10) * node0_f + (cot11) / (cot01 + cot11) * node1_f;
+    f[edge_vertices_idxs[1]] +=
+      (cot00) / (cot00 + cot10) * node0_f + (cot01) / (cot01 + cot11) * node1_f;
 
     if _ci == 34 {
       println!(
