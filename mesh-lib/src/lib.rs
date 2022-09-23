@@ -50,7 +50,9 @@ impl Crease {
     let t0 = vertices_coords[self.top_vertices_idxs[0]];
     let t1 = vertices_coords[self.top_vertices_idxs[1]];
 
-    let crease = self.get_edge_vector(vertices_coords).normalize();
+    let mut crease = self.get_edge_vector(vertices_coords);
+    let crease_length = crease.length();
+    crease = crease.normalize();
 
     let v0 = (t0 - p0).normalize();
     let v1 = (t1 - p0).normalize();
@@ -66,12 +68,12 @@ impl Crease {
       cos1,
       (t0 - p0).length() * sin0 * 1.0,
       (t1 - p0).length() * sin1 * 1.0,
-      sin0,
-      sin1,
+      (t0 - p0).length() * cos0 / crease_length,
+      (t1 - p0).length() * cos1 / crease_length,
     ]
   }
 
-  pub fn get_1_coef(&self, vertices_coords: &Vec<Vec3>) -> [f32; 6] {
+  pub fn get_1_coef(&self, vertices_coords: &Vec<Vec3>) -> [f32; 4] {
     let p0 = vertices_coords[self.edge_vertices_idxs[1]];
     let t0 = vertices_coords[self.top_vertices_idxs[0]];
     let t1 = vertices_coords[self.top_vertices_idxs[1]];
@@ -92,8 +94,6 @@ impl Crease {
       cos1,
       (t0 - p0).length() * sin0 * 1.0,
       (t1 - p0).length() * sin1 * 1.0,
-      sin0,
-      sin1,
     ]
   }
 

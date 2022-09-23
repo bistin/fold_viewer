@@ -221,7 +221,6 @@ fn joint_animation(
   let ref_creases = &mut *creases;
   let origin_face_angle = &record.face_angles;
   let edge_lengths = &record.edge_lengths;
-  let original_position = &record.original_position;
   let length = (ref_fold.faces_vertices).len();
   let faces_vertices = &mut ref_fold.faces_vertices;
   let positions = &mut ref_fold.vertices_coords;
@@ -277,22 +276,16 @@ fn joint_animation(
     let normal0 = normals[crease.face_idxs[0]];
     let normal1 = normals[crease.face_idxs[1]];
 
-    let [c00, c01, h0, h1, s00, s01] = crease.get_0_coef(&positions);
-    let [c10, c11, _h0, _h1, s10, s11] = crease.get_1_coef(&positions);
-
-    let cot00 = c00 / s00;
-    let cot01 = c01 / s01;
-
-    let cot10 = c10 / s10;
-    let cot11 = c11 / s11;
+    let [c00, c01, h0, h1, r00, r01] = crease.get_0_coef(&positions);
+    //let [c10, c11, _h0, _h1] = crease.get_1_coef(&positions);
 
     if (c00).abs() < 0.01 || (c01).abs() < 0.01 {
       continue;
     }
 
-    if (c10).abs() < 0.01 || (c11).abs() < 0.01 {
-      continue;
-    }
+    // if (c10).abs() < 0.01 || (c11).abs() < 0.01 {
+    //   continue;
+    // }
 
     if h0 < 0.00001 || h1 < 0.00001 {
       continue;
@@ -305,10 +298,8 @@ fn joint_animation(
     f[vertices_idxs[0]] -= node0_f;
     f[vertices_idxs[1]] -= node1_f;
 
-    f[edge_vertices_idxs[0]] +=
-      (cot10) / (cot00 + cot10) * node0_f + (cot11) / (cot01 + cot11) * node1_f;
-    f[edge_vertices_idxs[1]] +=
-      (cot00) / (cot00 + cot10) * node0_f + (cot01) / (cot01 + cot11) * node1_f;
+    f[edge_vertices_idxs[0]] += (1.0 - r00) * node0_f + (1.0 - r01) * node1_f;
+    f[edge_vertices_idxs[1]] += (r00) * node0_f + r01 * node1_f;
 
     if _ci == 34 {
       println!(
@@ -344,7 +335,7 @@ fn joint_animation(
     let normal = points_cross_vec3(a, b, c).normalize();
 
     let diff = sub(&angles, &origin_face_angle[fi]);
-    let mut force = scale(&diff, -1.0 * record.face_stiffness);
+    let force = scale(&diff, -1.0 * record.face_stiffness);
     // force[0] = 0.0;
     // force[1] = 0.0;
     // force[2] = 0.0;
