@@ -15,7 +15,6 @@ use std::fs;
 use bevy::render::mesh::{Indices, Mesh};
 
 pub struct Record {
-  original_position: Vec<Vec3>,
   face_angles: Vec<[f32; 3]>,
   edge_lengths: Vec<f32>,
   dt: f32,
@@ -42,11 +41,8 @@ fn main() {
   let creases = fold.get_creases();
   let velocity = vec![Vec3::new(0.0, 0.0, 0.0); fold.vertices_coords.len()];
 
-  let original_position = fold.vertices_coords.clone();
-
   let record = Record {
     fold_ratio: 0.3,
-    original_position,
     axial_stiffness,
     crease_crease_stiffness: 0.70,
     flat_crease_stiffness: 0.70,
@@ -86,7 +82,7 @@ fn setup(
 ) {
   let positions = &fold_obj.vertices_coords;
   let mut indices = Vec::with_capacity(fold_obj.faces_vertices.len() * 3);
-  let normals = vec![[1.0, 1.0, 0.0]; positions.len()];
+  let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
   let uvs = vec![[1.0, 1.0]; positions.len()];
 
   for face in &fold_obj.faces_vertices {
@@ -105,22 +101,21 @@ fn setup(
       .map(|n| [n[0] as f32, n[1] as f32, n[2] as f32])
       .collect::<Vec<[f32; 3]>>(),
   );
+
   mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-  mesh.insert_attribute(
-    Mesh::ATTRIBUTE_COLOR,
-    vec![[1.0, 0.0, 1.0, 1.0]; positions.len()],
-  );
-  // mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0, 1.0, 1.0, 1.0]);
   mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+  // mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0, 1.0, 1.0, 1.0]);
   // add entities to the world
 
   // plane
   commands.spawn_bundle(PbrBundle {
     mesh: meshes.add(mesh),
-    material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
+    //material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
+    material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
     ..default()
   });
 
+  // text
   commands
     .spawn_bundle(
       // Create a TextBundle that has a Text with a list of sections.
