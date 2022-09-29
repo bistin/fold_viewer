@@ -1,5 +1,4 @@
 mod system;
-
 use bevy::prelude::*;
 use bevy::render::mesh::PrimitiveTopology;
 use bevy_inspector_egui::WorldInspectorPlugin;
@@ -237,10 +236,6 @@ fn joint_animation(
 
     f[idxs[0]] += x01 / l * force + c * v01;
     f[idxs[1]] -= x01 / l * force + c * v01;
-
-    if idxs[0] == 0 || idxs[1] == 0 {
-      println!("force from edge,  force={}, vec={}", force, f[0].length());
-    }
   }
 
   for (_ci, crease) in ref_creases.iter().enumerate() {
@@ -278,10 +273,6 @@ fn joint_animation(
       continue;
     }
 
-    // if (c10).abs() < 0.01 || (c11).abs() < 0.01 {
-    //   continue;
-    // }
-
     if h0 < 0.00001 || h1 < 0.00001 {
       continue;
     }
@@ -295,15 +286,6 @@ fn joint_animation(
 
     f[edge_vertices_idxs[0]] += (1.0 - r00) * node0_f + (1.0 - r01) * node1_f;
     f[edge_vertices_idxs[1]] += (r00) * node0_f + r01 * node1_f;
-
-    if _ci == 34 {
-      println!(
-        "ci={},faces={:?} ,diff={:.3}, h0={:.3},h1={:.3}",
-        _ci, crease.face_idxs, diff, h0, h1
-      );
-
-      println!("force from angle,  force={}", f[0].length());
-    }
   }
 
   for (fi, idxs) in faces_vertices.iter().enumerate() {
@@ -350,9 +332,6 @@ fn joint_animation(
   //let positions = &mut *fold_obj.vertices_coords;
   let delta_t = record.dt;
   for (i, position) in &mut positions.iter_mut().enumerate() {
-    if i == 0 {
-      println!("i={}, f2={}", i, f[i].length());
-    }
     velocity[i] += delta_t * f[i] / 1.0;
     *position += velocity[i] * delta_t;
   }
