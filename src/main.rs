@@ -81,6 +81,7 @@ fn setup(
 ) {
   let positions = &fold_obj.vertices_coords;
   let mut indices = Vec::with_capacity(fold_obj.faces_vertices.len() * 3);
+  let mut indices2 = Vec::with_capacity(fold_obj.faces_vertices.len() * 3);
   let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
   let uvs = vec![[1.0, 1.0]; positions.len()];
 
@@ -88,6 +89,7 @@ fn setup(
     for j in 0..3 {
       indices.push(face[j] as u32);
       indices.push(face[(j + 1) % 3] as u32);
+      indices2.push(face[j] as u32);
     }
   }
 
@@ -101,14 +103,35 @@ fn setup(
       .collect::<Vec<[f32; 3]>>(),
   );
 
-  mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-  mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+  mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
+  mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs.clone());
+
+  let mut mesh2 = Mesh::new(PrimitiveTopology::TriangleList);
+  mesh2.set_indices(Some(Indices::U32(indices2)));
+  mesh2.insert_attribute(
+    Mesh::ATTRIBUTE_POSITION,
+    positions
+      .iter()
+      .map(|n| [n[0] as f32, n[1] as f32, n[2] as f32])
+      .collect::<Vec<[f32; 3]>>(),
+  );
+
+  mesh2.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+  mesh2.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
   // mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0, 1.0, 1.0, 1.0]);
   // add entities to the world
 
   // plane
   commands.spawn_bundle(PbrBundle {
     mesh: meshes.add(mesh),
+    //material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
+    material: materials.add(Color::rgb(0.0, 0.0, 0.0).into()),
+    ..default()
+  });
+
+  // plane
+  commands.spawn_bundle(PbrBundle {
+    mesh: meshes.add(mesh2),
     //material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
     material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
     ..default()
@@ -253,6 +276,7 @@ fn joint_animation(
     } else if diff > 5.0 {
       diff -= std::f32::consts::PI * 2.0;
     }
+
     let crease_stiffness = if crease.assignment == "F" {
       record.flat_crease_stiffness
     } else {
@@ -267,9 +291,8 @@ fn joint_animation(
     let normal1 = normals[crease.face_idxs[1]];
 
     let [c00, c01, h0, h1, r00, r01] = crease.get_0_coef(&positions);
-    //let [c10, c11, _h0, _h1] = crease.get_1_coef(&positions);
 
-    if (c00).abs() < 0.01 || (c01).abs() < 0.01 {
+    if (c00).abs() < 0.0001 || (c01).abs() < 0.0001 {
       continue;
     }
 
@@ -337,6 +360,7 @@ fn joint_animation(
   }
 
   for (_handle_id, mesh) in meshes.iter_mut() {
+    //println!("{}", _handle_id.);
     mesh.insert_attribute(
       Mesh::ATTRIBUTE_POSITION,
       positions
