@@ -254,11 +254,11 @@ fn joint_animation(
     if f32::is_nan(force) || f32::is_infinite(force) {
       panic!("err");
     }
-    let c = record.percent_damping * 2.0 * (k * 1.0).sqrt();
+    let c = 2.0 * record.percent_damping * (k * 1.0).sqrt();
     let v01 = velocity[idxs[1]] - velocity[idxs[0]];
 
-    f[idxs[0]] += x01 / l * force + c * v01;
-    f[idxs[1]] -= x01 / l * force + c * v01;
+    f[idxs[0]] += x01.normalize() * force + c * v01;
+    f[idxs[1]] -= x01.normalize() * force + c * v01;
   }
 
   for (_ci, crease) in ref_creases.iter().enumerate() {
