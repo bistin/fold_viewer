@@ -310,7 +310,7 @@ fn joint_animation(
     let normal0 = normals[crease.face_idxs[0]];
     let normal1 = normals[crease.face_idxs[1]];
 
-    let [_c00, _c01, h0, h1, r00, r01] = crease.get_0_coef(&positions);
+    let [h0, h1, r00, r01] = crease.get_0_coef(&positions);
 
     // if (c00).abs() < 0.0001 || (c01).abs() < 0.0001 {
     //   continue;
