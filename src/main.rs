@@ -1,7 +1,11 @@
 mod system;
+use bevy::reflect::erased_serde::private::serde::de::IntoDeserializer;
+use bevy::time::FixedTimestep;
+
 use bevy::prelude::*;
 use bevy::render::mesh::PrimitiveTopology;
 use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy_prototype_debug_lines::*;
 use smooth_bevy_cameras::controllers::orbit::{
   OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
 };
@@ -40,14 +44,16 @@ fn main() {
   let creases = fold.get_creases();
   let velocity = vec![Vec3::new(0.0, 0.0, 0.0); fold.vertices_coords.len()];
 
+  let dt = fold.get_dt(axial_stiffness);
+
   let record = Record {
     fold_ratio: 0.3,
     axial_stiffness,
     crease_crease_stiffness: 0.70,
     flat_crease_stiffness: 0.70,
     face_stiffness: 0.2,
-    percent_damping: 0.48,
-    dt: fold.get_dt(axial_stiffness),
+    percent_damping: 0.45,
+    dt,
     face_angles: fold.get_face_angles(),
     edge_lengths: fold.get_edge_length(),
     state: 1,
@@ -59,10 +65,17 @@ fn main() {
     .insert_resource(velocity)
     .insert_resource(record)
     .add_plugins(DefaultPlugins)
+    .add_plugin(DebugLinesPlugin::with_depth_test(true))
     .add_plugin(LookTransformPlugin)
     .add_plugin(WorldInspectorPlugin::new())
     .add_startup_system(setup)
-    .add_system(joint_animation)
+    .add_system_set(
+      SystemSet::new()
+        // This prints out "hello world" once every second
+        .with_run_criteria(FixedTimestep::step((dt).into()))
+        .with_system(joint_animation),
+    )
+    //.add_system(joint_animation)
     .add_system(crate::system::print_keyboard_event_system)
     .add_system(crate::system::text_update_system)
     .add_system(bevy::window::close_on_esc)
@@ -126,14 +139,6 @@ fn setup(
     mesh: meshes.add(mesh),
     //material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
     material: materials.add(Color::rgb(0.0, 0.0, 0.0).into()),
-    ..default()
-  });
-
-  // plane
-  commands.spawn_bundle(PbrBundle {
-    mesh: meshes.add(mesh2),
-    //material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
-    material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
     ..default()
   });
 
@@ -226,6 +231,7 @@ fn joint_animation(
   mut creases: ResMut<Vec<Crease>>,
   record: Res<Record>,
   mut velocity: ResMut<Vec<Vec3>>,
+  mut lines: ResMut<DebugLines>,
 ) {
   // stop or simulation
   if record.state == 0 {
@@ -242,6 +248,7 @@ fn joint_animation(
   let faces_vertices = &mut ref_fold.faces_vertices;
   let positions = &mut ref_fold.vertices_coords;
   let mut f = vec![Vec3::new(0.0, 0.0, 0.0); length];
+  //let mut tmp = Vec::new();
 
   let edges_vertices = &mut ref_fold.edges_vertices;
   for (i, idxs) in edges_vertices.iter().enumerate() {
@@ -250,16 +257,29 @@ fn joint_animation(
 
     let l = x01.length();
     let k = record.axial_stiffness / edge_lengths[i];
-    let force = k * (l - edge_lengths[i]);
+    let diff = l - edge_lengths[i];
+    // if diff.abs() < 0.01 {
+    //   tmp.push(idxs[0]);
+    //   tmp.push(idxs[1]);
+    // }
+    let force = k * diff;
     if f32::is_nan(force) || f32::is_infinite(force) {
       panic!("err");
     }
     let c = 2.0 * record.percent_damping * (k * 1.0).sqrt();
+
+    // return globals.percentDamping*2*Math.sqrt(this.getK()*this.getMinMass());
     let v01 = velocity[idxs[1]] - velocity[idxs[0]];
 
     f[idxs[0]] += x01.normalize() * force + c * v01;
     f[idxs[1]] -= x01.normalize() * force + c * v01;
   }
+
+  // for x in &tmp {
+  //   f[*x] = Vec3::new(0.0, 0.0, 0.0);
+  // }
+
+  let linef = f.clone();
 
   for (_ci, crease) in ref_creases.iter().enumerate() {
     // crease
@@ -271,9 +291,9 @@ fn joint_animation(
       continue;
     }
 
-    if diff < -5.0 {
+    if diff < -5.5 {
       diff += std::f32::consts::PI * 2.0;
-    } else if diff > 5.0 {
+    } else if diff > 5.5 {
       diff -= std::f32::consts::PI * 2.0;
     }
 
@@ -290,15 +310,15 @@ fn joint_animation(
     let normal0 = normals[crease.face_idxs[0]];
     let normal1 = normals[crease.face_idxs[1]];
 
-    let [c00, c01, h0, h1, r00, r01] = crease.get_0_coef(&positions);
+    let [_c00, _c01, h0, h1, r00, r01] = crease.get_0_coef(&positions);
 
-    if (c00).abs() < 0.0001 || (c01).abs() < 0.0001 {
-      continue;
-    }
+    // if (c00).abs() < 0.0001 || (c01).abs() < 0.0001 {
+    //   continue;
+    // }
 
-    if h0 < 0.00001 || h1 < 0.00001 {
-      continue;
-    }
+    // if h0 < 0.00001 || h1 < 0.00001 {
+    //   continue;
+    // }
 
     let edge_vertices_idxs = crease.edge_vertices_idxs;
     let node0_f = normal0 * rxn_force_scale / h0;
@@ -310,6 +330,8 @@ fn joint_animation(
     f[edge_vertices_idxs[0]] += (1.0 - r00) * node0_f + (1.0 - r01) * node1_f;
     f[edge_vertices_idxs[1]] += (r00) * node0_f + r01 * node1_f;
   }
+
+  let anglef = f.clone();
 
   for (fi, idxs) in faces_vertices.iter().enumerate() {
     let a = positions[idxs[0]];
@@ -355,8 +377,24 @@ fn joint_animation(
   //let positions = &mut *fold_obj.vertices_coords;
   let delta_t = record.dt;
   for (i, position) in &mut positions.iter_mut().enumerate() {
+    if f[i].length() < 0.01 {
+      continue;
+    }
+
     velocity[i] += delta_t * f[i] / 1.0;
     *position += velocity[i] * delta_t;
+
+    // let start = position.clone();
+    //lines.line(start, start + f[i], 0.0);
+    // lines.line_colored(start, start + linef[i], 0.0, Color::BLUE);
+    // lines.line_colored(start, start + anglef[i] - linef[i], 0.0, Color::YELLOW);
+    if i == 19 {}
+
+    if i == 20 {
+      //lines.line(start, start + f[i], 0.0);
+      //lines.line_colored(start, start + linef[i], 0.0, Color::BLUE);
+      //lines.line_colored(start, start + ang20, 0.0, Color::YELLOW);
+    }
   }
 
   for (_handle_id, mesh) in meshes.iter_mut() {
