@@ -1,4 +1,7 @@
 mod system;
+use bevy::reflect::erased_serde::private::serde::de::IntoDeserializer;
+use bevy::time::FixedTimestep;
+
 use bevy::prelude::*;
 use bevy::render::mesh::PrimitiveTopology;
 use bevy_inspector_egui::WorldInspectorPlugin;
@@ -34,12 +37,14 @@ pub struct RatioText;
 pub struct StatusText;
 
 fn main() {
-  let axial_stiffness = 30.0;
+  let axial_stiffness = 20.0;
 
   let data = fs::read_to_string("./mesh-lib/src/bird.fold").unwrap();
   let mut fold: Fold = serde_json::from_str(&data).unwrap();
   let creases = fold.get_creases();
   let velocity = vec![Vec3::new(0.0, 0.0, 0.0); fold.vertices_coords.len()];
+
+  let dt = fold.get_dt(axial_stiffness);
 
   let record = Record {
     fold_ratio: 0.3,
@@ -48,7 +53,7 @@ fn main() {
     flat_crease_stiffness: 0.70,
     face_stiffness: 0.2,
     percent_damping: 0.45,
-    dt: fold.get_dt(axial_stiffness),
+    dt,
     face_angles: fold.get_face_angles(),
     edge_lengths: fold.get_edge_length(),
     state: 1,
@@ -64,7 +69,13 @@ fn main() {
     .add_plugin(LookTransformPlugin)
     .add_plugin(WorldInspectorPlugin::new())
     .add_startup_system(setup)
-    .add_system(joint_animation)
+    .add_system_set(
+      SystemSet::new()
+        // This prints out "hello world" once every second
+        .with_run_criteria(FixedTimestep::step((dt).into()))
+        .with_system(joint_animation),
+    )
+    //.add_system(joint_animation)
     .add_system(crate::system::print_keyboard_event_system)
     .add_system(crate::system::text_update_system)
     .add_system(bevy::window::close_on_esc)
@@ -130,14 +141,6 @@ fn setup(
     material: materials.add(Color::rgb(0.0, 0.0, 0.0).into()),
     ..default()
   });
-
-  // plane
-  // commands.spawn_bundle(PbrBundle {
-  //   mesh: meshes.add(mesh2),
-  //   //material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
-  //   material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
-  //   ..default()
-  // });
 
   // text
   commands
@@ -245,7 +248,7 @@ fn joint_animation(
   let faces_vertices = &mut ref_fold.faces_vertices;
   let positions = &mut ref_fold.vertices_coords;
   let mut f = vec![Vec3::new(0.0, 0.0, 0.0); length];
-  let mut tmp = Vec::new();
+  //let mut tmp = Vec::new();
 
   let edges_vertices = &mut ref_fold.edges_vertices;
   for (i, idxs) in edges_vertices.iter().enumerate() {
@@ -254,16 +257,18 @@ fn joint_animation(
 
     let l = x01.length();
     let k = record.axial_stiffness / edge_lengths[i];
-    let mut diff = l - edge_lengths[i];
-    if diff.abs() < 0.01 {
-      tmp.push(idxs[0]);
-      tmp.push(idxs[1]);
-    }
+    let diff = l - edge_lengths[i];
+    // if diff.abs() < 0.01 {
+    //   tmp.push(idxs[0]);
+    //   tmp.push(idxs[1]);
+    // }
     let force = k * diff;
     if f32::is_nan(force) || f32::is_infinite(force) {
       panic!("err");
     }
     let c = 2.0 * record.percent_damping * (k * 1.0).sqrt();
+
+    // return globals.percentDamping*2*Math.sqrt(this.getK()*this.getMinMass());
     let v01 = velocity[idxs[1]] - velocity[idxs[0]];
 
     f[idxs[0]] += x01.normalize() * force + c * v01;
@@ -305,7 +310,7 @@ fn joint_animation(
     let normal0 = normals[crease.face_idxs[0]];
     let normal1 = normals[crease.face_idxs[1]];
 
-    let [c00, c01, h0, h1, r00, r01] = crease.get_0_coef(&positions);
+    let [_c00, _c01, h0, h1, r00, r01] = crease.get_0_coef(&positions);
 
     // if (c00).abs() < 0.0001 || (c01).abs() < 0.0001 {
     //   continue;
@@ -352,7 +357,7 @@ fn joint_animation(
     let normal = points_cross_vec3(a, b, c).normalize();
 
     let diff = sub(&angles, &origin_face_angle[fi]);
-    let mut force = scale(&diff, -1.0 * record.face_stiffness);
+    let force = scale(&diff, -1.0 * record.face_stiffness);
     // force[0] = 0.0;
     // force[1] = 0.0;
     // force[2] = 0.0;
@@ -379,10 +384,10 @@ fn joint_animation(
     velocity[i] += delta_t * f[i] / 1.0;
     *position += velocity[i] * delta_t;
 
-    let start = position.clone();
+    // let start = position.clone();
     //lines.line(start, start + f[i], 0.0);
-    //lines.line_colored(start, start + linef[i], 0.0, Color::BLUE);
-    //lines.line_colored(start, start + anglef[i] - linef[i], 0.0, Color::YELLOW);
+    // lines.line_colored(start, start + linef[i], 0.0, Color::BLUE);
+    // lines.line_colored(start, start + anglef[i] - linef[i], 0.0, Color::YELLOW);
     if i == 19 {}
 
     if i == 20 {
