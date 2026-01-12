@@ -200,8 +200,10 @@ impl Fold {
         }
 
         let dt = 1.0 / (2.0 * std::f32::consts::PI * max_freq) * 0.9;
-        self.dt = Some(dt);
-        dt
+        // Clamp dt to reasonable bounds for numerical stability
+        let dt_clamped = dt.clamp(0.0001, 0.1);
+        self.dt = Some(dt_clamped);
+        dt_clamped
       }
     }
   }

@@ -249,16 +249,31 @@ fn joint_animation(
     let x01 = positions[idxs[1]] - positions[idxs[0]];
 
     let l = x01.length();
-    let k = record.axial_stiffness / edge_lengths[i];
-    let force = k * (l - edge_lengths[i]);
-    if f32::is_nan(force) || f32::is_infinite(force) {
-      panic!("err");
+    if l < 0.00001 {
+      continue;
     }
+
+    let k = record.axial_stiffness / edge_lengths[i];
+    let direction = x01 / l; // normalize
+
+    // Spring force: F = k * (current_length - original_length) * direction
+    let spring_force_magnitude = k * (l - edge_lengths[i]);
+
+    // Damping force: F_d = c * (v_relative · direction) * direction
+    // This ensures damping only affects velocity along the edge
     let c = 2.0 * record.percent_damping * (k * 1.0).sqrt();
     let v01 = velocity[idxs[1]] - velocity[idxs[0]];
+    let v_along_edge = v01.dot(direction);
+    let damping_force_magnitude = c * v_along_edge;
 
-    f[idxs[0]] += x01.normalize() * force + c * v01;
-    f[idxs[1]] -= x01.normalize() * force + c * v01;
+    let total_force = direction * (spring_force_magnitude + damping_force_magnitude);
+
+    if total_force.is_nan() {
+      continue;
+    }
+
+    f[idxs[0]] += total_force;
+    f[idxs[1]] -= total_force;
   }
 
   for (_ci, crease) in ref_creases.iter().enumerate() {
@@ -304,11 +319,15 @@ fn joint_animation(
     let node0_f = normal0 * rxn_force_scale / h0;
     let node1_f = normal1 * rxn_force_scale / h1;
 
+    // Apply forces to top vertices (opposite to normals)
     f[vertices_idxs[0]] -= node0_f;
     f[vertices_idxs[1]] -= node1_f;
 
-    f[edge_vertices_idxs[0]] += (1.0 - r00) * node0_f + (1.0 - r01) * node1_f;
-    f[edge_vertices_idxs[1]] += (r00) * node0_f + r01 * node1_f;
+    // Apply reaction forces to edge vertices (equally distributed)
+    // This matches the OrigamiSimulator implementation
+    let edge_reaction = (node0_f + node1_f) * 0.5;
+    f[edge_vertices_idxs[0]] += edge_reaction;
+    f[edge_vertices_idxs[1]] += edge_reaction;
   }
 
   for (fi, idxs) in faces_vertices.iter().enumerate() {
@@ -323,22 +342,31 @@ fn joint_animation(
       continue;
     }
 
-    let ab = (b - a).normalize();
-    let ac = (c - a).normalize();
-    let bc = (c - b).normalize();
-    let angles = [
-      ab.dot(ac).acos(),
-      -ab.dot(bc).acos(),
-      ac.dot(bc).acos(), //dot(&ac, &bc).acos(),
-    ];
+    let ab = (b - a) / len_ab;
+    let ac = (c - a) / len_ca;
+    let bc = (c - b) / len_bc;
 
-    let normal = points_cross_vec3(a, b, c).normalize();
+    // Clamp dot products to [-1, 1] to prevent NaN from acos
+    let dot_ab_ac = ab.dot(ac).clamp(-1.0, 1.0);
+    let dot_ab_bc = ab.dot(bc).clamp(-1.0, 1.0);
+    let dot_ac_bc = ac.dot(bc).clamp(-1.0, 1.0);
+
+    let angles = [dot_ab_ac.acos(), -dot_ab_bc.acos(), dot_ac_bc.acos()];
+
+    // Check for NaN angles
+    if angles[0].is_nan() || angles[1].is_nan() || angles[2].is_nan() {
+      continue;
+    }
+
+    let normal_vec = points_cross_vec3(a, b, c);
+    let normal_length = normal_vec.length();
+    if normal_length < 0.000001 {
+      continue;
+    }
+    let normal = normal_vec / normal_length;
 
     let diff = sub(&angles, &origin_face_angle[fi]);
     let force = scale(&diff, -1.0 * record.face_stiffness);
-    // force[0] = 0.0;
-    // force[1] = 0.0;
-    // force[2] = 0.0;
 
     let tmp_ba = normal.cross(a - b) / len_ab;
     let tmp_bc = normal.cross(c - b) / len_bc;
@@ -347,9 +375,16 @@ fn joint_animation(
     let tmp_cb = -1.0 * tmp_bc;
     let tmp_ac = -1.0 * tmp_ca;
 
-    f[idxs[0]] += force[1] * tmp_ba + force[0] * (tmp_ab - tmp_ac) - force[2] * tmp_ca;
-    f[idxs[1]] += force[1] * (tmp_bc - tmp_ba) - force[0] * tmp_ab + force[2] * tmp_cb;
-    f[idxs[2]] += -force[1] * tmp_bc + force[0] * tmp_ac + force[2] * (tmp_ca - tmp_cb);
+    let f0 = force[1] * tmp_ba + force[0] * (tmp_ab - tmp_ac) - force[2] * tmp_ca;
+    let f1 = force[1] * (tmp_bc - tmp_ba) - force[0] * tmp_ab + force[2] * tmp_cb;
+    let f2 = -force[1] * tmp_bc + force[0] * tmp_ac + force[2] * (tmp_ca - tmp_cb);
+
+    // Check for NaN before applying forces
+    if !f0.is_nan() && !f1.is_nan() && !f2.is_nan() {
+      f[idxs[0]] += f0;
+      f[idxs[1]] += f1;
+      f[idxs[2]] += f2;
+    }
   }
 
   //let positions = &mut *fold_obj.vertices_coords;
