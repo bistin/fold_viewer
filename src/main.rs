@@ -1,18 +1,17 @@
 mod system;
 use bevy::prelude::*;
 use bevy::render::mesh::PrimitiveTopology;
-use bevy_inspector_egui::WorldInspectorPlugin;
-use smooth_bevy_cameras::controllers::orbit::{
-  OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin,
-};
-use smooth_bevy_cameras::LookTransformPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 
 use mesh_lib::vec_math::{points_cross_vec3, scale, sub};
 use mesh_lib::{Crease, Fold};
 use std::fs;
 
 use bevy::render::mesh::{Indices, Mesh};
+use bevy::render::render_asset::RenderAssetUsages;
 
+#[derive(Resource)]
 pub struct Record {
   face_angles: Vec<[f32; 3]>,
   edge_lengths: Vec<f32>,
@@ -31,6 +30,15 @@ pub struct RatioText;
 
 #[derive(Component)]
 pub struct StatusText;
+
+#[derive(Resource)]
+struct FoldResource(Fold);
+
+#[derive(Resource)]
+struct CreasesResource(Vec<Crease>);
+
+#[derive(Resource)]
+struct VelocityResource(Vec<Vec3>);
 
 fn main() {
   let axial_stiffness = 20.0;
@@ -54,21 +62,30 @@ fn main() {
   };
 
   App::new()
-    .insert_resource(fold)
-    .insert_resource(creases)
-    .insert_resource(velocity)
+    .insert_resource(FoldResource(fold))
+    .insert_resource(CreasesResource(creases))
+    .insert_resource(VelocityResource(velocity))
     .insert_resource(record)
     .add_plugins(DefaultPlugins)
-    .add_plugin(LookTransformPlugin)
-    .add_plugin(WorldInspectorPlugin::new())
-    .add_startup_system(setup)
-    .add_system(joint_animation)
-    .add_system(crate::system::print_keyboard_event_system)
-    .add_system(crate::system::text_update_system)
-    .add_system(bevy::window::close_on_esc)
-    .add_plugin(OrbitCameraPlugin::default())
-    //.add_plugin(ScheduleRunnerPlugin(Duration::from_secs_f64(1.0 / 60.0)))
+    .add_plugins(WorldInspectorPlugin::new())
+    .add_plugins(PanOrbitCameraPlugin)
+    .add_systems(Startup, setup)
+    .add_systems(Update, (
+      joint_animation,
+      crate::system::print_keyboard_event_system,
+      crate::system::text_update_system,
+      close_on_esc,
+    ))
     .run();
+}
+
+fn close_on_esc(
+  keyboard_input: Res<ButtonInput<KeyCode>>,
+  mut exit: EventWriter<AppExit>,
+) {
+  if keyboard_input.just_pressed(KeyCode::Escape) {
+    exit.send(AppExit::Success);
+  }
 }
 
 /// set up a simple 3D scene
@@ -77,15 +94,15 @@ fn setup(
   mut meshes: ResMut<Assets<Mesh>>,
   mut materials: ResMut<Assets<StandardMaterial>>,
   asset_server: Res<AssetServer>,
-  fold_obj: Res<Fold>,
+  fold_obj: Res<FoldResource>,
 ) {
-  let positions = &fold_obj.vertices_coords;
-  let mut indices = Vec::with_capacity(fold_obj.faces_vertices.len() * 3);
-  let mut indices2 = Vec::with_capacity(fold_obj.faces_vertices.len() * 3);
+  let positions = &fold_obj.0.vertices_coords;
+  let mut indices = Vec::with_capacity(fold_obj.0.faces_vertices.len() * 3);
+  let mut indices2 = Vec::with_capacity(fold_obj.0.faces_vertices.len() * 3);
   let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
   let uvs = vec![[1.0, 1.0]; positions.len()];
 
-  for face in &fold_obj.faces_vertices {
+  for face in &fold_obj.0.faces_vertices {
     for j in 0..3 {
       indices.push(face[j] as u32);
       indices.push(face[(j + 1) % 3] as u32);
@@ -93,8 +110,8 @@ fn setup(
     }
   }
 
-  let mut mesh = Mesh::new(PrimitiveTopology::LineList);
-  mesh.set_indices(Some(Indices::U32(indices)));
+  let mut mesh = Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::default());
+  mesh.insert_indices(Indices::U32(indices));
   mesh.insert_attribute(
     Mesh::ATTRIBUTE_POSITION,
     positions
@@ -106,8 +123,8 @@ fn setup(
   mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
   mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs.clone());
 
-  let mut mesh2 = Mesh::new(PrimitiveTopology::TriangleList);
-  mesh2.set_indices(Some(Indices::U32(indices2)));
+  let mut mesh2 = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+  mesh2.insert_indices(Indices::U32(indices2));
   mesh2.insert_attribute(
     Mesh::ATTRIBUTE_POSITION,
     positions
@@ -118,124 +135,105 @@ fn setup(
 
   mesh2.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
   mesh2.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-  // mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![1.0, 1.0, 1.0, 1.0]);
-  // add entities to the world
 
-  // plane
-  commands.spawn_bundle(PbrBundle {
-    mesh: meshes.add(mesh),
-    //material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
-    material: materials.add(Color::rgb(0.0, 0.0, 0.0).into()),
-    ..default()
-  });
+  // plane - lines
+  commands.spawn((
+    Mesh3d(meshes.add(mesh)),
+    MeshMaterial3d(materials.add(Color::srgb(0.0, 0.0, 0.0))),
+  ));
 
-  // plane
-  commands.spawn_bundle(PbrBundle {
-    mesh: meshes.add(mesh2),
-    //material: materials.add(Color::rgb(0.1, 0.1, 0.1).into()),
-    material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
-    ..default()
-  });
+  // plane - triangles
+  commands.spawn((
+    Mesh3d(meshes.add(mesh2)),
+    MeshMaterial3d(materials.add(Color::srgb(0.3, 0.5, 0.3))),
+  ));
 
-  // text
-  commands
-    .spawn_bundle(
-      // Create a TextBundle that has a Text with a list of sections.
-      TextBundle::from_sections([
-        TextSection::new(
-          "fold ratio: ",
-          TextStyle {
-            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: 30.0,
-            color: Color::WHITE,
-          },
-        ),
-        TextSection::from_style(TextStyle {
-          font: asset_server.load("fonts/FiraMono-Medium.ttf"),
-          font_size: 30.0,
-          color: Color::GOLD,
-        }),
-      ])
-      .with_style(Style {
-        align_self: AlignSelf::FlexEnd,
-        position_type: PositionType::Absolute,
-        position: UiRect {
-          bottom: Val::Px(5.0),
-          left: Val::Px(15.0),
-          ..default()
-        },
-        ..default()
-      }),
-    )
-    .insert(RatioText);
+  // text - fold ratio
+  commands.spawn((
+    Text::new("fold ratio: "),
+    TextFont {
+      font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+      font_size: 30.0,
+      ..default()
+    },
+    TextColor(Color::WHITE),
+    Node {
+      position_type: PositionType::Absolute,
+      bottom: Val::Px(5.0),
+      left: Val::Px(15.0),
+      ..default()
+    },
+    RatioText,
+  )).with_child((
+    TextSpan::new("0.00"),
+    TextFont {
+      font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+      font_size: 30.0,
+      ..default()
+    },
+    TextColor(Color::srgb(1.0, 0.84, 0.0)),
+  ));
 
-  commands
-    .spawn_bundle(
-      // Create a TextBundle that has a Text with a list of sections.
-      TextBundle::from_sections([
-        TextSection::new(
-          "status:",
-          TextStyle {
-            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: 30.0,
-            color: Color::WHITE,
-          },
-        ),
-        TextSection::from_style(TextStyle {
-          font: asset_server.load("fonts/FiraMono-Medium.ttf"),
-          font_size: 30.0,
-          color: Color::GOLD,
-        }),
-      ])
-      .with_style(Style {
-        align_self: AlignSelf::FlexEnd,
-        position_type: PositionType::Absolute,
-        position: UiRect {
-          bottom: Val::Px(30.0),
-          left: Val::Px(15.0),
-          ..default()
-        },
-        ..default()
-      }),
-    )
-    .insert(StatusText);
+  // text - status
+  commands.spawn((
+    Text::new("status: "),
+    TextFont {
+      font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+      font_size: 30.0,
+      ..default()
+    },
+    TextColor(Color::WHITE),
+    Node {
+      position_type: PositionType::Absolute,
+      bottom: Val::Px(35.0),
+      left: Val::Px(15.0),
+      ..default()
+    },
+    StatusText,
+  )).with_child((
+    TextSpan::new("simulation"),
+    TextFont {
+      font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+      font_size: 30.0,
+      ..default()
+    },
+    TextColor(Color::srgb(1.0, 0.84, 0.0)),
+  ));
 
   // light
-  commands.spawn_bundle(PointLightBundle {
-    point_light: PointLight {
-      intensity: 1500.0,
+  commands.spawn((
+    PointLight {
+      intensity: 1500000.0,
       shadows_enabled: true,
       ..default()
     },
-    transform: Transform::from_xyz(4.0, 8.0, 4.0),
-    ..default()
-  });
+    Transform::from_xyz(4.0, 8.0, 4.0),
+  ));
 
-  commands
-    .spawn_bundle(Camera3dBundle::default())
-    .insert_bundle(OrbitCameraBundle::new(
-      OrbitCameraController::default(),
-      Vec3::new(0.0, 5.0, 0.0),
-      Vec3::new(0., 0., 0.),
-    ));
+  // camera
+  commands.spawn((
+    Camera3d::default(),
+    Transform::from_xyz(0.0, 5.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+    PanOrbitCamera::default(),
+  ));
 }
 
 fn joint_animation(
   mut meshes: ResMut<Assets<Mesh>>,
-  mut fold_obj: ResMut<Fold>,
-  mut creases: ResMut<Vec<Crease>>,
+  mut fold_obj: ResMut<FoldResource>,
+  mut creases: ResMut<CreasesResource>,
   record: Res<Record>,
-  mut velocity: ResMut<Vec<Vec3>>,
+  mut velocity: ResMut<VelocityResource>,
 ) {
   // stop or simulation
   if record.state == 0 {
     return;
   }
   // calculate all normals
-  let normals = fold_obj.get_normals();
+  let normals = fold_obj.0.get_normals();
 
-  let ref_fold = &mut *fold_obj;
-  let ref_creases = &mut *creases;
+  let ref_fold = &mut fold_obj.0;
+  let ref_creases = &mut creases.0;
   let origin_face_angle = &record.face_angles;
   let edge_lengths = &record.edge_lengths;
   let length = (ref_fold.faces_vertices).len();
@@ -255,7 +253,7 @@ fn joint_animation(
       panic!("err");
     }
     let c = 2.0 * record.percent_damping * (k * 1.0).sqrt();
-    let v01 = velocity[idxs[1]] - velocity[idxs[0]];
+    let v01 = velocity.0[idxs[1]] - velocity.0[idxs[0]];
 
     f[idxs[0]] += x01.normalize() * force + c * v01;
     f[idxs[1]] -= x01.normalize() * force + c * v01;
@@ -355,8 +353,8 @@ fn joint_animation(
   //let positions = &mut *fold_obj.vertices_coords;
   let delta_t = record.dt;
   for (i, position) in &mut positions.iter_mut().enumerate() {
-    velocity[i] += delta_t * f[i] / 1.0;
-    *position += velocity[i] * delta_t;
+    velocity.0[i] += delta_t * f[i] / 1.0;
+    *position += velocity.0[i] * delta_t;
   }
 
   for (_handle_id, mesh) in meshes.iter_mut() {
